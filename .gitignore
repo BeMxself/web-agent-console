@@ -1,0 +1,29 @@
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# OS / editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test and temp artifacts
+coverage/
+dist/
+.tmp/
+tmp/
+
+# Internal planning docs
+docs/superpowers/
+
+# Local agent workflow artifacts
+.superpowers/

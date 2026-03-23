@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Codex Web Console PoC</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <main id="app-layout" class="layout">
+      <aside id="session-list" class="panel panel-scroll"></aside>
+      <div
+        id="project-panel-resizer"
+        class="panel-resizer"
+        role="separator"
+        aria-label="调整项目/会话宽度"
+        aria-orientation="vertical"
+      ></div>
+      <section id="conversation-panel" class="panel panel-column">
+        <div class="conversation-header">
+          <button
+            id="project-panel-toggle"
+            class="panel-toggle panel-toggle--left"
+            type="button"
+            aria-controls="session-list"
+            aria-expanded="true"
+          >
+            <span class="panel-toggle-icon" aria-hidden="true">‹</span>
+            <span class="panel-toggle-label">项目/会话</span>
+            <span class="panel-toggle-mobile-glyph" aria-hidden="true">
+              <span class="panel-toggle-mobile-bar"></span>
+              <span class="panel-toggle-mobile-bar"></span>
+              <span class="panel-toggle-mobile-bar"></span>
+            </span>
+          </button>
+          <div class="conversation-header-title">
+            <span id="conversation-status" class="status-badge-dot status-badge-dot--connected conversation-status-dot" aria-hidden="true"></span>
+            <div id="conversation-title" class="conversation-title" hidden></div>
+          </div>
+          <button
+            id="activity-panel-toggle"
+            class="panel-toggle panel-toggle--right"
+            type="button"
+            aria-controls="activity-panel"
+            aria-expanded="false"
+          >
+            <span class="panel-toggle-label">活动/任务</span>
+            <span class="panel-toggle-icon" aria-hidden="true">›</span>
+          </button>
+        </div>
+        <div id="conversation-scroll" class="panel-scroll-body">
+          <div id="conversation-body"></div>
+        </div>
+        <div id="conversation-nav" class="conversation-nav-slot"></div>
+        <form id="composer">
+          <div id="composer-attachments" class="composer-attachments" hidden></div>
+          <textarea id="composer-input" rows="4" placeholder="继续这个会话，或者打开历史会话后追问"></textarea>
+          <p id="composer-attachment-error" class="composer-attachment-error" hidden></p>
+          <div class="composer-toolbar">
+            <div id="approval-mode-controls" class="approval-mode-controls-slot"></div>
+            <div class="composer-toolbar-secondary">
+              <div class="composer-attachment-actions">
+                <button type="button" id="composer-upload-file">上传文件</button>
+                <button type="button" id="composer-upload-image">上传图片</button>
+                <input id="composer-file-input" type="file" multiple hidden />
+                <input id="composer-image-input" type="file" accept="image/*" multiple hidden />
+              </div>
+              <label class="composer-nav-toggle" title="显示导航跳转按钮">
+                <input id="conversation-nav-toggle" type="checkbox" checked />
+                <span class="sr-only">显示导航跳转按钮</span>
+                <span class="composer-nav-toggle-icon" aria-hidden="true"></span>
+              </label>
+              <div class="composer-actions">
+                <button type="submit" id="send-button">发送</button>
+                <button type="button" id="interrupt-button">中断</button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </section>
+      <div
+        id="activity-panel-resizer"
+        class="panel-resizer"
+        role="separator"
+        aria-label="调整活动宽度"
+        aria-orientation="vertical"
+        hidden
+      ></div>
+      <aside id="activity-panel" class="panel panel-scroll" hidden></aside>
+    </main>
+    <div id="auth-gate" class="auth-gate" hidden>
+      <form id="login-form" class="auth-card">
+        <div class="auth-card-eyebrow">访问控制</div>
+        <h2 class="auth-card-title">输入共享密码</h2>
+        <p class="auth-card-copy">登录后即可继续查看项目、会话和流式活动。</p>
+        <label class="auth-field">
+          <span>共享密码</span>
+          <input
+            id="login-password"
+            class="auth-input"
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            placeholder="请输入共享密码"
+          />
+        </label>
+        <p id="login-error" class="auth-error" hidden></p>
+        <div class="auth-actions">
+          <button id="login-button" class="dialog-button dialog-button--primary auth-submit" type="submit">登录</button>
+        </div>
+      </form>
+    </div>
+    <dialog id="mobile-drawer" class="mobile-drawer-frame"></dialog>
+    <dialog id="history-dialog" class="history-dialog-frame"></dialog>
+    <dialog id="project-dialog" class="project-dialog-frame">
+      <form id="project-dialog-form" class="project-dialog-shell">
+        <div class="dialog-header">
+          <div>
+            <div class="dialog-eyebrow">添加项目</div>
+            <h2 class="dialog-title">把工作区加入左侧项目树</h2>
+          </div>
+          <button class="history-dialog-close" type="button" data-project-dialog-close="true" aria-label="关闭">×</button>
+        </div>
+        <label class="dialog-field">
+          <span>项目路径</span>
+          <input
+            id="project-dialog-input"
+            class="dialog-input"
+            type="text"
+            name="cwd"
+            placeholder="~/Projects/my-workspace"
+            autocomplete="off"
+          />
+        </label>
+        <div class="dialog-actions">
+          <button class="dialog-button" type="button" data-project-dialog-close="true">取消</button>
+          <button class="dialog-button dialog-button--primary" type="submit">添加项目</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="rename-dialog" class="project-dialog-frame">
+      <form id="rename-dialog-form" class="project-dialog-shell">
+        <div class="dialog-header">
+          <div>
+            <div class="dialog-eyebrow">重命名会话</div>
+            <h2 class="dialog-title" id="rename-dialog-session-title">当前会话</h2>
+          </div>
+          <button class="history-dialog-close" type="button" data-rename-dialog-close="true" aria-label="关闭">×</button>
+        </div>
+        <label class="dialog-field">
+          <span>会话名称</span>
+          <input
+            id="rename-dialog-input"
+            class="dialog-input"
+            type="text"
+            name="sessionName"
+            placeholder="输入新的会话名称"
+            autocomplete="off"
+          />
+        </label>
+        <div class="dialog-actions">
+          <button class="dialog-button" type="button" data-rename-dialog-close="true">取消</button>
+          <button class="dialog-button dialog-button--primary" type="submit">保存名称</button>
+        </div>
+      </form>
+    </dialog>
+    <script src="/vendor/markdown-it.min.js"></script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
