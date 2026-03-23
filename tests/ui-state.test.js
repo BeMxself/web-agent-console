@@ -1658,7 +1658,13 @@ test('render helpers show native cards for reasoning command mcp and unknown ite
   assert.doesNotMatch(detailHtml, /thread-item-card--command thread-item-card--collapsible\" open/);
   assert.match(detailHtml, /stdout line 1/);
   assert.match(detailHtml, /MCP 工具/);
+  assert.match(detailHtml, /thread-item-card--mcp thread-item-card--collapsible/);
+  assert.doesNotMatch(detailHtml, /thread-item-card--mcp thread-item-card--collapsible\" open/);
+  assert.match(detailHtml, /thread-item-card-summary-meta/);
+  assert.match(detailHtml, /thread-item-card-toggle-label/);
   assert.match(detailHtml, /openaiDeveloperDocs/);
+  assert.match(detailHtml, /search_openai_docs/);
+  assert.match(detailHtml, /streaming ui/);
   assert.match(detailHtml, /Searching docs/);
   assert.match(detailHtml, /通用事件/);
   assert.match(detailHtml, /contextCompaction/);

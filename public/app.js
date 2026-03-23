@@ -3762,6 +3762,8 @@ function renderMcpToolCallTurnItem(item) {
     tone: 'mcp',
     status: formatItemStatus(item.status),
     statusTone: item.status,
+    collapsible: true,
+    expanded: false,
     body: [
       renderKeyValueList([
         ['Server', item.server],
