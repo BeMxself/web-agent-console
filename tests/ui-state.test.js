@@ -2565,9 +2565,13 @@ test('browser app renders a compact composer task-summary band with expanded pla
   await app.selectSession('thread-1');
 
   assert.match(fakeDocument.composer.innerHTML, /已完成 2 个任务（共 6 个）/);
-  assert.match(fakeDocument.composer.innerHTML, /整理现有会话状态入口/);
-  assert.match(fakeDocument.composer.innerHTML, /接入运行态动作语义/);
-  assert.match(fakeDocument.composer.innerHTML, /收敛附件入口层级/);
+  assert.match(fakeDocument.composer.innerHTML, /data-task-summary-breakdown="true"/);
+  assert.match(fakeDocument.composer.innerHTML, /data-task-summary-group="completed"/);
+  assert.match(fakeDocument.composer.innerHTML, /data-task-summary-group="running"/);
+  assert.match(fakeDocument.composer.innerHTML, /data-task-summary-group="upcoming"/);
+  assert.match(fakeDocument.composer.innerHTML, /已完成[\s\S]*整理现有会话状态入口[\s\S]*补齐紧凑摘要文案/);
+  assert.match(fakeDocument.composer.innerHTML, /进行中[\s\S]*接入运行态动作语义/);
+  assert.match(fakeDocument.composer.innerHTML, /即将开始[\s\S]*收敛附件入口层级[\s\S]*完成移动端折叠态/);
 
   await app.selectSession('thread-2');
 
@@ -2578,8 +2582,14 @@ test('browser app renders a compact composer task-summary band with expanded pla
 test('browser app applies the new composer action hierarchy and surfaces blocked feedback inline', async () => {
   const fakeDocument = createFakeDocument();
   const fakeEventSource = createFakeEventSource();
+  const requests = [];
   const app = createAppController({
     fetchImpl: async (url, options = {}) => {
+      requests.push({
+        url,
+        method: options.method ?? 'GET',
+      });
+
       if (url === '/api/sessions') {
         return jsonResponse({
           projects: [
@@ -2656,6 +2666,10 @@ test('browser app applies the new composer action hierarchy and surfaces blocked
   await app.loadSessions();
   await app.selectSession('thread-1');
 
+  const attachmentTriggerMatches = [
+    ...fakeDocument.composer.innerHTML.matchAll(/data-composer-attach-trigger="true"/g),
+  ];
+  assert.equal(attachmentTriggerMatches.length, 1);
   assert.equal(fakeDocument.composerUploadFileButton.hidden, false);
   assert.equal(fakeDocument.composerUploadImageButton.hidden, true);
   assert.equal(fakeDocument.sendButton.textContent, '发送');
@@ -2665,15 +2679,28 @@ test('browser app applies the new composer action hierarchy and surfaces blocked
     type: 'turn_started',
     payload: { threadId: 'thread-1', turnId: 'turn-2' },
   });
+  assert.equal(fakeDocument.sendButton.dataset.action, 'interrupt');
   assert.match(fakeDocument.sendButton.textContent, /(中断|停止)/);
 
-  await app.interruptTurn();
+  fakeDocument.composer.dispatchEvent({
+    type: 'submit',
+    preventDefault() {},
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(requests.some((request) => request.url === '/api/sessions/thread-1/interrupt'), true);
+  assert.equal(
+    requests.some((request) => request.url === '/api/turn' && request.method === 'POST'),
+    false,
+  );
+  assert.equal(fakeDocument.sendButton.dataset.action, 'interrupting');
   assert.match(fakeDocument.sendButton.textContent, /停止/);
   assert.match(fakeDocument.composer.innerHTML, /等待审批后可继续发送/);
 });
 
 test('browser app renders compact settings metadata including sandbox mode and keeps controls disabled while busy', async () => {
   const fakeDocument = createFakeDocument({ mobile: true });
+  const sandboxModeFromSessionOptions = 'sandbox::spec-proof-9f3e7a';
   const app = createAppController({
     fetchImpl: async (url) => {
       if (url === '/api/sessions') {
@@ -2727,7 +2754,7 @@ test('browser app renders compact settings metadata including sandbox mode and k
             reasoningEffort: null,
           },
           runtimeContext: {
-            sandboxMode: 'workspace-write',
+            sandboxMode: sandboxModeFromSessionOptions,
           },
         });
       }
@@ -2756,7 +2783,26 @@ test('browser app renders compact settings metadata including sandbox mode and k
               diff: null,
               realtime: { status: 'idle', sessionId: null, items: [] },
             },
-            turns: [],
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'plan',
+                    explanation: '先做紧凑摘要，再落地细节。',
+                    plan: [
+                      { step: '梳理状态源', status: 'completed' },
+                      { step: '渲染摘要带', status: 'completed' },
+                      { step: '对齐中断语义', status: 'inProgress' },
+                      { step: '补齐阻塞反馈', status: 'pending' },
+                      { step: '合并附件入口', status: 'pending' },
+                      { step: '移动端折叠验证', status: 'pending' },
+                    ],
+                  },
+                ],
+              },
+            ],
           },
         });
       }
@@ -2799,12 +2845,29 @@ test('browser app renders compact settings metadata including sandbox mode and k
   await app.loadSessionOptions();
   await app.selectSession('thread-1');
 
-  assert.match(fakeDocument.approvalModeControls.innerHTML, /模型/);
-  assert.match(fakeDocument.approvalModeControls.innerHTML, /推理强度/);
-  assert.match(fakeDocument.approvalModeControls.innerHTML, /沙箱模式/);
-  assert.match(fakeDocument.approvalModeControls.innerHTML, /审批模式/);
-  assert.match(fakeDocument.approvalModeControls.innerHTML, /workspace-write/);
+  assert.match(fakeDocument.composer.innerHTML, /已完成 2 个任务（共 6 个）/);
   assert.match(fakeDocument.composer.innerHTML, /data-task-summary-collapsed="true"/);
+  assert.doesNotMatch(fakeDocument.composer.innerHTML, /梳理状态源/);
+
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /<div class="composer-settings-row"/);
+  assert.match(
+    fakeDocument.approvalModeControls.innerHTML,
+    /<span class="composer-settings-item-label">模型<\/span>\s*<span class="composer-settings-item-value">gpt-5\.4<\/span>/,
+  );
+  assert.match(
+    fakeDocument.approvalModeControls.innerHTML,
+    /<span class="composer-settings-item-label">推理强度<\/span>\s*<span class="composer-settings-item-value">高<\/span>/,
+  );
+  assert.match(
+    fakeDocument.approvalModeControls.innerHTML,
+    /<span class="composer-settings-item-label">沙箱模式<\/span>\s*<span class="composer-settings-item-value">sandbox::spec-proof-9f3e7a<\/span>/,
+  );
+  assert.match(
+    fakeDocument.approvalModeControls.innerHTML,
+    /<span class="composer-settings-item-label">审批模式<\/span>\s*<span class="composer-settings-item-value">手动审批<\/span>/,
+  );
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /workspace-write/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /title="模型"/);
 
   await app.selectSession('thread-2');
 
