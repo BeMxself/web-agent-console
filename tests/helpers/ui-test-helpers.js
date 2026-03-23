@@ -7,7 +7,14 @@ export function setupUiTestEnvironment() {
 }
 
 export function readPublicFile(name) {
-  return readFileSync(new URL(`../../public/${name}`, import.meta.url), 'utf8');
+  const fileUrl = new URL(`../../public/${name}`, import.meta.url);
+  const source = readFileSync(fileUrl, 'utf8');
+
+  if (!name.endsWith('.css')) {
+    return source;
+  }
+
+  return inlineCssImports(source, fileUrl);
 }
 
 export function createFakeEventSource() {
@@ -50,6 +57,14 @@ export function assertComposerSetting(html, key, label, value) {
 
 export function escapeRegExp(value) {
   return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function inlineCssImports(source, fileUrl) {
+  return source.replace(/@import\s+['"](.+?)['"];/g, (_statement, relativePath) => {
+    const importedUrl = new URL(relativePath, fileUrl);
+    const importedSource = readFileSync(importedUrl, 'utf8');
+    return inlineCssImports(importedSource, importedUrl);
+  });
 }
 
 export function jsonResponse(body, status = 200) {

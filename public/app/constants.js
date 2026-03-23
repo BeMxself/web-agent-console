@@ -1,0 +1,12 @@
+export const DEFAULT_PROJECT_PANEL_WIDTH = 312;
+export const DEFAULT_ACTIVITY_PANEL_WIDTH = 320;
+export const MIN_PANEL_WIDTH = 240;
+export const MAX_PANEL_WIDTH = 520;
+export const PROJECT_PANEL_LABEL = '项目/会话';
+export const ACTIVITY_PANEL_LABEL = '活动/任务';
+export const CONVERSATION_WINDOW_THRESHOLD = 40;
+export const INITIAL_VISIBLE_TURN_COUNT = 24;
+export const EXPANDED_VISIBLE_TURN_COUNT = 12;
+export const CONVERSATION_WINDOW_EDGE_TRIGGER_PX = 240;
+export const CONVERSATION_AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 160;
+export const PANEL_PREFERENCE_STORAGE_KEY = 'codex.webAgentConsole.preferences.v1';
