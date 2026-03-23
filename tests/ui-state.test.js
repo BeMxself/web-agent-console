@@ -2453,6 +2453,366 @@ test('browser app loads session option catalogs, restores per-session settings, 
   });
 });
 
+test('browser app renders a compact composer task-summary band with expanded plan details and a placeholder fallback', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-1',
+                  name: 'Planned thread',
+                  runtime: {
+                    turnStatus: 'idle',
+                    activeTurnId: null,
+                    diff: null,
+                    realtime: { status: 'idle', sessionId: null, items: [] },
+                  },
+                },
+                {
+                  id: 'thread-2',
+                  name: 'No-plan thread',
+                  runtime: {
+                    turnStatus: 'idle',
+                    activeTurnId: null,
+                    diff: null,
+                    realtime: { status: 'idle', sessionId: null, items: [] },
+                  },
+                },
+              ],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Planned thread',
+            cwd: '/tmp/workspace-a',
+            runtime: {
+              turnStatus: 'idle',
+              activeTurnId: null,
+              diff: null,
+              realtime: { status: 'idle', sessionId: null, items: [] },
+            },
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'plan',
+                    explanation: '先收敛范围，再推进实现。',
+                    plan: [
+                      { step: '整理现有会话状态入口', status: 'completed' },
+                      { step: '补齐紧凑摘要文案', status: 'completed' },
+                      { step: '接入运行态动作语义', status: 'inProgress' },
+                      { step: '收敛附件入口层级', status: 'pending' },
+                      { step: '完成移动端折叠态', status: 'pending' },
+                      { step: '回归验证', status: 'pending' },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-2') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-2',
+            name: 'No-plan thread',
+            cwd: '/tmp/workspace-a',
+            runtime: {
+              turnStatus: 'idle',
+              activeTurnId: null,
+              diff: null,
+              realtime: { status: 'idle', sessionId: null, items: [] },
+            },
+            turns: [{ id: 'turn-2', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  assert.match(fakeDocument.composer.innerHTML, /已完成 2 个任务（共 6 个）/);
+  assert.match(fakeDocument.composer.innerHTML, /整理现有会话状态入口/);
+  assert.match(fakeDocument.composer.innerHTML, /接入运行态动作语义/);
+  assert.match(fakeDocument.composer.innerHTML, /收敛附件入口层级/);
+
+  await app.selectSession('thread-2');
+
+  assert.match(fakeDocument.composer.innerHTML, /暂无任务计划/);
+  assert.doesNotMatch(fakeDocument.composer.innerHTML, /activity-card/);
+});
+
+test('browser app applies the new composer action hierarchy and surfaces blocked feedback inline', async () => {
+  const fakeDocument = createFakeDocument();
+  const fakeEventSource = createFakeEventSource();
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-1',
+                  name: 'Busy thread',
+                  waitingOnApproval: true,
+                  pendingApprovalCount: 1,
+                  runtime: {
+                    turnStatus: 'idle',
+                    activeTurnId: null,
+                    diff: null,
+                    realtime: { status: 'idle', sessionId: null, items: [] },
+                  },
+                },
+              ],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Busy thread',
+            cwd: '/tmp/workspace-a',
+            waitingOnApproval: true,
+            pendingApprovalCount: 1,
+            runtime: {
+              turnStatus: 'idle',
+              activeTurnId: null,
+              diff: null,
+              realtime: { status: 'idle', sessionId: null, items: [] },
+            },
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/interrupt') {
+        return jsonResponse({ interrupted: true }, 202);
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      if (url === '/api/turn' && options.method === 'POST') {
+        return jsonResponse({
+          threadId: 'thread-1',
+          turn: { id: 'turn-2', status: 'started', items: [] },
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}${options.method ? ` (${options.method})` : ''}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  assert.equal(fakeDocument.composerUploadFileButton.hidden, false);
+  assert.equal(fakeDocument.composerUploadImageButton.hidden, true);
+  assert.equal(fakeDocument.sendButton.textContent, '发送');
+
+  app.setComposerDraft('ready to run');
+  fakeEventSource.emit({
+    type: 'turn_started',
+    payload: { threadId: 'thread-1', turnId: 'turn-2' },
+  });
+  assert.match(fakeDocument.sendButton.textContent, /(中断|停止)/);
+
+  await app.interruptTurn();
+  assert.match(fakeDocument.sendButton.textContent, /停止/);
+  assert.match(fakeDocument.composer.innerHTML, /等待审批后可继续发送/);
+});
+
+test('browser app renders compact settings metadata including sandbox mode and keeps controls disabled while busy', async () => {
+  const fakeDocument = createFakeDocument({ mobile: true });
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-1',
+                  name: 'Idle thread',
+                  runtime: {
+                    turnStatus: 'idle',
+                    activeTurnId: null,
+                    diff: null,
+                    realtime: { status: 'idle', sessionId: null, items: [] },
+                  },
+                },
+                {
+                  id: 'thread-2',
+                  name: 'Running thread',
+                  runtime: {
+                    turnStatus: 'started',
+                    activeTurnId: 'turn-9',
+                    diff: null,
+                    realtime: { status: 'idle', sessionId: null, items: [] },
+                  },
+                },
+              ],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          modelOptions: [
+            { value: '', label: '默认' },
+            { value: 'gpt-5.4', label: 'gpt-5.4' },
+          ],
+          reasoningEffortOptions: [
+            { value: '', label: '默认' },
+            { value: 'high', label: '高' },
+          ],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+          },
+          runtimeContext: {
+            sandboxMode: 'workspace-write',
+          },
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({ model: 'gpt-5.4', reasoningEffort: 'high' });
+      }
+
+      if (url === '/api/sessions/thread-2/settings') {
+        return jsonResponse({ model: null, reasoningEffort: null });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Idle thread',
+            cwd: '/tmp/workspace-a',
+            runtime: {
+              turnStatus: 'idle',
+              activeTurnId: null,
+              diff: null,
+              realtime: { status: 'idle', sessionId: null, items: [] },
+            },
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-2') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-2',
+            name: 'Running thread',
+            cwd: '/tmp/workspace-a',
+            runtime: {
+              turnStatus: 'started',
+              activeTurnId: 'turn-9',
+              diff: null,
+              realtime: { status: 'idle', sessionId: null, items: [] },
+            },
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadApprovalMode();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /模型/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /推理强度/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /沙箱模式/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /审批模式/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /workspace-write/);
+  assert.match(fakeDocument.composer.innerHTML, /data-task-summary-collapsed="true"/);
+
+  await app.selectSession('thread-2');
+
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"[^>]*disabled/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"[^>]*disabled/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-approval-mode-select="true"[^>]*disabled/);
+});
+
 test('browser app adds pasted images to the composer and keeps them sendable when the provider supports images', async () => {
   const fakeDocument = createFakeDocument();
   const app = createAppController({
