@@ -52,31 +52,49 @@
           <div id="conversation-body"></div>
         </div>
         <div id="conversation-nav" class="conversation-nav-slot"></div>
-        <form id="composer">
-          <div id="composer-attachments" class="composer-attachments" hidden></div>
-          <textarea id="composer-input" rows="4" placeholder="继续这个会话，或者打开历史会话后追问"></textarea>
-          <p id="composer-attachment-error" class="composer-attachment-error" hidden></p>
-          <div class="composer-toolbar">
-            <div id="approval-mode-controls" class="approval-mode-controls-slot"></div>
-            <div class="composer-toolbar-secondary">
-              <div class="composer-attachment-actions">
-                <button type="button" id="composer-upload-file">上传文件</button>
-                <button type="button" id="composer-upload-image">上传图片</button>
-                <input id="composer-file-input" type="file" multiple hidden />
-                <input id="composer-image-input" type="file" accept="image/*" multiple hidden />
+        <div class="session-dock">
+          <section id="session-dock-plan-summary" class="session-dock-plan-summary" hidden></section>
+          <form id="composer" class="session-dock-composer">
+            <div class="composer-card">
+              <div id="composer-attachments" class="composer-attachments" hidden></div>
+              <textarea id="composer-input" rows="5" placeholder="输入下一步请求"></textarea>
+              <p id="composer-attachment-error" class="composer-attachment-error" hidden></p>
+              <p id="composer-inline-feedback" class="composer-inline-feedback" hidden></p>
+              <div class="composer-action-row">
+                <div class="composer-action-row-start">
+                  <button
+                    type="button"
+                    id="composer-upload-file"
+                    class="composer-attach-trigger"
+                    data-composer-attach-trigger="true"
+                    aria-label="添加附件"
+                    aria-expanded="false"
+                  >
+                    +
+                  </button>
+                  <div id="composer-attachment-menu" class="composer-attachment-menu" hidden>
+                    <button type="button" id="composer-upload-file-action">上传文件</button>
+                    <button type="button" id="composer-upload-image">上传图片</button>
+                  </div>
+                  <input id="composer-file-input" type="file" multiple hidden />
+                  <input id="composer-image-input" type="file" accept="image/*" multiple hidden />
+                </div>
+                <div class="composer-actions">
+                  <button type="submit" id="send-button">发送</button>
+                  <button type="button" id="interrupt-button">中断</button>
+                </div>
               </div>
-              <label class="composer-nav-toggle" title="显示导航跳转按钮">
-                <input id="conversation-nav-toggle" type="checkbox" checked />
-                <span class="sr-only">显示导航跳转按钮</span>
-                <span class="composer-nav-toggle-icon" aria-hidden="true"></span>
-              </label>
-              <div class="composer-actions">
-                <button type="submit" id="send-button">发送</button>
-                <button type="button" id="interrupt-button">中断</button>
+              <div class="composer-footer">
+                <div id="approval-mode-controls" class="approval-mode-controls-slot"></div>
+                <label class="composer-nav-toggle composer-nav-toggle--subtle" title="显示导航跳转按钮">
+                  <input id="conversation-nav-toggle" type="checkbox" checked />
+                  <span class="sr-only">显示导航跳转按钮</span>
+                  <span class="composer-nav-toggle-icon" aria-hidden="true"></span>
+                </label>
               </div>
             </div>
-          </div>
-        </form>
+          </form>
+        </div>
       </section>
       <div
         id="activity-panel-resizer"

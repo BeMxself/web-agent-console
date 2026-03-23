@@ -34,6 +34,9 @@ const initialState = {
   composerDraft: '',
   composerAttachments: [],
   composerAttachmentError: null,
+  taskSummaryCollapsedBySession: {},
+  composerSettingsCollapsedByScope: {},
+  composerAttachmentMenuOpen: false,
   historyDialogProjectId: null,
   historyDialogTab: 'active',
   projectPanelCollapsed: false,
@@ -173,6 +176,7 @@ export function reduceState(state = initialState, action) {
           ...normalizeComposerAttachments(action.payload.attachments),
         ],
         composerAttachmentError: null,
+        composerAttachmentMenuOpen: false,
       };
     case 'composer_attachment_removed':
       return {
@@ -226,6 +230,42 @@ export function reduceState(state = initialState, action) {
             ? action.payload.visible
             : !state.showConversationNav,
       };
+    case 'task_summary_visibility_toggled': {
+      const sessionId = String(action.payload?.sessionId ?? state.selectedSessionId ?? '').trim();
+      if (!sessionId) {
+        return state;
+      }
+
+      return {
+        ...state,
+        taskSummaryCollapsedBySession: {
+          ...state.taskSummaryCollapsedBySession,
+          [sessionId]: Boolean(action.payload?.collapsed),
+        },
+      };
+    }
+    case 'composer_settings_visibility_toggled': {
+      const scopeId = String(action.payload?.scopeId ?? '').trim();
+      if (!scopeId) {
+        return state;
+      }
+
+      return {
+        ...state,
+        composerSettingsCollapsedByScope: {
+          ...state.composerSettingsCollapsedByScope,
+          [scopeId]: Boolean(action.payload?.collapsed),
+        },
+      };
+    }
+    case 'composer_attachment_menu_toggled':
+      return {
+        ...state,
+        composerAttachmentMenuOpen:
+          typeof action.payload?.open === 'boolean'
+            ? action.payload.open
+            : !state.composerAttachmentMenuOpen,
+      };
     case 'mobile_drawer_opened':
       return {
         ...state,
@@ -261,6 +301,7 @@ export function reduceState(state = initialState, action) {
         pendingSessionProjectId: null,
         composerAttachments: preserveComposerAttachments ? state.composerAttachments : [],
         composerAttachmentError: preserveComposerAttachments ? state.composerAttachmentError : null,
+        composerAttachmentMenuOpen: false,
         unreadBySession: clearSessionUnread(state.unreadBySession, action.payload.id),
         subagentDialog: preserveDialog ? state.subagentDialog : null,
       };
@@ -282,6 +323,7 @@ export function reduceState(state = initialState, action) {
         pendingSessionProjectId: action.payload.projectId,
         composerAttachments: [],
         composerAttachmentError: null,
+        composerAttachmentMenuOpen: false,
       };
     case 'project_session_draft_cleared':
       return {
@@ -1178,6 +1220,44 @@ export function createAppController({
       applyAction({ type: 'conversation_nav_visibility_toggled', payload: { visible } });
       return state.showConversationNav;
     },
+    toggleTaskSummary(sessionId = state.selectedSessionId) {
+      const targetSessionId = String(sessionId ?? '').trim();
+      if (!targetSessionId) {
+        return null;
+      }
+
+      const collapsed = !isTaskSummaryCollapsed(
+        state,
+        targetSessionId,
+        isMobileViewport(documentRef),
+      );
+      applyAction({
+        type: 'task_summary_visibility_toggled',
+        payload: { sessionId: targetSessionId, collapsed },
+      });
+      return state.taskSummaryCollapsedBySession[targetSessionId] ?? collapsed;
+    },
+    toggleComposerSettings(scopeId = getComposerSettingsScopeId(state)) {
+      const targetScopeId = String(scopeId ?? '').trim() || getComposerSettingsScopeId(state);
+      if (!targetScopeId) {
+        return null;
+      }
+
+      const collapsed = !isComposerSettingsCollapsed(
+        state,
+        targetScopeId,
+        isMobileViewport(documentRef),
+      );
+      applyAction({
+        type: 'composer_settings_visibility_toggled',
+        payload: { scopeId: targetScopeId, collapsed },
+      });
+      return state.composerSettingsCollapsedByScope[targetScopeId] ?? collapsed;
+    },
+    setComposerAttachmentMenuOpen(open) {
+      applyAction({ type: 'composer_attachment_menu_toggled', payload: { open } });
+      return state.composerAttachmentMenuOpen;
+    },
     setMobileDrawerMode(mode) {
       applyAction({ type: 'mobile_drawer_mode_changed', payload: { mode } });
       return state.mobileDrawerMode;
@@ -1700,12 +1780,16 @@ export function createAppController({
     const activityPanelResizer = documentRef.querySelector('#activity-panel-resizer');
     const conversationStatus = documentRef.querySelector('#conversation-status');
     const conversationTitle = documentRef.querySelector('#conversation-title');
+    const sessionDockPlanSummary = documentRef.querySelector('#session-dock-plan-summary');
     const composerAttachmentsStrip = documentRef.querySelector('#composer-attachments');
     const composerAttachmentError = documentRef.querySelector('#composer-attachment-error');
+    const composerInlineFeedback = documentRef.querySelector('#composer-inline-feedback');
     const composerInput = documentRef.querySelector('#composer-input');
     const approvalModeControls = documentRef.querySelector('#approval-mode-controls');
     const composerUploadFileButton = documentRef.querySelector('#composer-upload-file');
+    const composerUploadFileAction = documentRef.querySelector('#composer-upload-file-action');
     const composerUploadImageButton = documentRef.querySelector('#composer-upload-image');
+    const composerAttachmentMenu = documentRef.querySelector('#composer-attachment-menu');
     const composerFileInput = documentRef.querySelector('#composer-file-input');
     const composerImageInput = documentRef.querySelector('#composer-image-input');
     const conversationNavToggle = documentRef.querySelector('#conversation-nav-toggle');
@@ -1755,14 +1839,18 @@ export function createAppController({
       conversationTitle,
       authLocked ? '访问控制' : resolveSelectedSessionTitle(state, detail),
     );
+    syncTaskSummaryBand(sessionDockPlanSummary, detail, state, mobileViewport);
     syncComposerInput(composerInput, state);
     syncComposerAttachmentsStrip(composerAttachmentsStrip, state);
     syncComposerAttachmentError(composerAttachmentError, state);
+    syncComposerInlineFeedback(composerInlineFeedback, state);
     syncConversationNavToggle(conversationNavToggle, state.showConversationNav);
     syncComposerButtons(sendButton, interruptButton, state);
     syncComposerAttachmentActions(
       composerUploadFileButton,
+      composerUploadFileAction,
       composerUploadImageButton,
+      composerAttachmentMenu,
       composerFileInput,
       composerImageInput,
       state,
@@ -1774,6 +1862,7 @@ export function createAppController({
       authLocked,
       approvalUiState,
       sessionSettingsUiState,
+      mobileViewport,
     );
 
     if (projectPanelToggle) {
@@ -1792,6 +1881,22 @@ export function createAppController({
       for (const button of composerAttachmentsStrip.querySelectorAll('[data-composer-attachment-remove]')) {
         button.addEventListener('click', () => {
           controller.removeComposerAttachment(button.dataset.composerAttachmentRemove);
+        });
+      }
+    }
+
+    if (sessionDockPlanSummary) {
+      for (const button of sessionDockPlanSummary.querySelectorAll('[data-task-summary-toggle]')) {
+        button.addEventListener('click', () => {
+          controller.toggleTaskSummary(button.dataset.taskSummarySessionId || state.selectedSessionId);
+        });
+      }
+    }
+
+    if (approvalModeControls) {
+      for (const button of approvalModeControls.querySelectorAll('[data-composer-settings-toggle]')) {
+        button.addEventListener('click', () => {
+          controller.toggleComposerSettings(button.dataset.composerSettingsScope);
         });
       }
     }
@@ -1896,7 +2001,6 @@ export function createAppController({
     if (approvalModeControls) {
       const select = approvalModeControls.querySelector('[data-approval-mode-select]');
       if (select) {
-        select.disabled = approvalModeRequestInFlight;
         select.addEventListener('change', () => {
           if (select.disabled) {
             return;
@@ -2063,6 +2167,7 @@ export function createAppController({
     const composerAttachmentsStrip = documentRef.querySelector('#composer-attachments');
     const composerInput = documentRef.querySelector('#composer-input');
     const composerUploadFileButton = documentRef.querySelector('#composer-upload-file');
+    const composerUploadFileAction = documentRef.querySelector('#composer-upload-file-action');
     const composerUploadImageButton = documentRef.querySelector('#composer-upload-image');
     const composerFileInput = documentRef.querySelector('#composer-file-input');
     const composerImageInput = documentRef.querySelector('#composer-image-input');
@@ -2108,10 +2213,16 @@ export function createAppController({
     });
 
     composerUploadFileButton?.addEventListener('click', () => {
+      controller.setComposerAttachmentMenuOpen(!state.composerAttachmentMenuOpen);
+    });
+
+    composerUploadFileAction?.addEventListener('click', () => {
+      controller.setComposerAttachmentMenuOpen(false);
       composerFileInput?.click?.();
     });
 
     composerUploadImageButton?.addEventListener('click', () => {
+      controller.setComposerAttachmentMenuOpen(false);
       composerImageInput?.click?.();
     });
 
@@ -2907,6 +3018,7 @@ function syncApprovalModeControls(
   authLocked,
   approvalUiState = null,
   sessionSettingsUiState = null,
+  mobileViewport = false,
 ) {
   if (!node) {
     return;
@@ -2914,7 +3026,7 @@ function syncApprovalModeControls(
 
   node.innerHTML = authLocked
     ? ''
-    : renderApprovalModeControls(state, approvalUiState, sessionSettingsUiState);
+    : renderApprovalModeControls(state, approvalUiState, sessionSettingsUiState, { mobileViewport });
   node.hidden = authLocked;
 }
 
@@ -3271,17 +3383,26 @@ function isActiveExternalRuntime(runtime) {
   );
 }
 
-function renderApprovalModeControls(state, approvalUiState = null, sessionSettingsUiState = null) {
+function renderApprovalModeControls(
+  state,
+  approvalUiState = null,
+  sessionSettingsUiState = null,
+  { mobileViewport = false } = {},
+) {
   const normalizedMode = normalizeApprovalMode(state?.approvalMode);
   const sessionOptions = normalizeSessionOptions(state?.sessionOptions);
   const selectedSettings = getSelectedSessionSettings(state);
   const selectedSessionId = String(state?.selectedSessionId ?? '').trim();
+  const sessionBusy = isSessionBusy(state, selectedSessionId);
   const approvalPending = approvalUiState?.approvalModePending === true;
   const sessionSettingsPending =
     sessionSettingsUiState?.pending === true &&
     sessionSettingsUiState?.pendingThreadId === selectedSessionId;
   const sessionSettingsDisabled =
     sessionSettingsPending || !canEditSessionSettings(state, selectedSessionId);
+  const approvalDisabled = approvalPending || sessionBusy;
+  const sandboxMode =
+    firstNonEmptyText(sessionOptions.runtimeContext?.sandboxMode) ?? '未提供';
   const inlineFeedback = [
     sessionSettingsUiState?.error
       ? `<div class="approval-feedback approval-feedback--inline" role="status">${escapeHtml(sessionSettingsUiState.error)}</div>`
@@ -3293,9 +3414,10 @@ function renderApprovalModeControls(state, approvalUiState = null, sessionSettin
     .filter(Boolean)
     .join('');
 
-  return [
-    '<div class="approval-mode-shell" role="group" aria-label="会话与审批设置">',
-    renderSettingsSelectControl({
+  const settingDescriptors = [
+    {
+      kind: 'select',
+      settingKey: 'model',
       label: '模型',
       ariaLabel: '模型',
       dataAttribute: 'data-session-model-select',
@@ -3303,8 +3425,11 @@ function renderApprovalModeControls(state, approvalUiState = null, sessionSettin
       value: selectedSettings.model,
       disabled: sessionSettingsDisabled,
       pending: sessionSettingsPending,
-    }),
-    renderSettingsSelectControl({
+      valueLabel: resolveSessionOptionLabel(sessionOptions.modelOptions, selectedSettings.model),
+    },
+    {
+      kind: 'select',
+      settingKey: 'reasoning',
       label: '推理强度',
       ariaLabel: '推理强度',
       dataAttribute: 'data-session-reasoning-select',
@@ -3312,8 +3437,20 @@ function renderApprovalModeControls(state, approvalUiState = null, sessionSettin
       value: selectedSettings.reasoningEffort,
       disabled: sessionSettingsDisabled,
       pending: sessionSettingsPending,
-    }),
-    renderSettingsSelectControl({
+      valueLabel: resolveSessionOptionLabel(
+        sessionOptions.reasoningEffortOptions,
+        selectedSettings.reasoningEffort,
+      ),
+    },
+    {
+      kind: 'readonly',
+      settingKey: 'sandbox',
+      label: '沙箱隔离类型',
+      value: sandboxMode,
+    },
+    {
+      kind: 'select',
+      settingKey: 'approval',
       label: '审批模式',
       ariaLabel: '审批模式',
       dataAttribute: 'data-approval-mode-select',
@@ -3322,15 +3459,102 @@ function renderApprovalModeControls(state, approvalUiState = null, sessionSettin
         { value: 'auto-approve', label: '自动通过' },
       ],
       value: normalizedMode,
-      disabled: approvalPending,
+      disabled: approvalDisabled,
       pending: approvalPending,
-    }),
+      valueLabel: resolveSessionOptionLabel(
+        [
+          { value: 'manual', label: '手动审批' },
+          { value: 'auto-approve', label: '自动通过' },
+        ],
+        normalizedMode,
+      ),
+    },
+  ];
+  const controlsMarkup = settingDescriptors
+    .map((descriptor) => renderComposerSettingControl(descriptor))
+    .join('');
+
+  if (!mobileViewport) {
+    return [
+      '<div class="composer-settings-row" role="group" aria-label="会话与审批设置">',
+      controlsMarkup,
+      inlineFeedback,
+      '</div>',
+    ].join('');
+  }
+
+  const scopeId = getComposerSettingsScopeId(state);
+  const collapsed = isComposerSettingsCollapsed(state, scopeId, mobileViewport);
+
+  return [
+    `<div class="composer-settings-mobile-shell" data-composer-settings-collapsed="${String(collapsed)}">`,
+    renderComposerSettingsSummary(settingDescriptors, scopeId, collapsed),
+    `<div class="composer-settings-mobile-panel"${collapsed ? ' hidden' : ''}>`,
+    '<div class="composer-settings-row" role="group" aria-label="会话与审批设置">',
+    controlsMarkup,
+    '</div>',
+    '</div>',
     inlineFeedback,
     '</div>',
   ].join('');
 }
 
+function renderComposerSettingControl(descriptor) {
+  return descriptor.kind === 'readonly'
+    ? renderSettingsReadonlyControl(descriptor)
+    : renderSettingsSelectControl(descriptor);
+}
+
+function renderComposerSettingsSummary(settingDescriptors, scopeId, collapsed) {
+  return [
+    '<div class="composer-settings-mobile-summary-row">',
+    '<div class="composer-settings-mobile-summary" data-composer-settings-summary="true" role="note" aria-label="当前会话设置摘要">',
+    settingDescriptors.map((descriptor) => renderComposerSettingsSummaryItem(descriptor)).join(''),
+    '</div>',
+    `<button class="composer-settings-mobile-toggle" type="button" data-composer-settings-toggle="true" data-composer-settings-scope="${escapeHtml(scopeId)}" aria-expanded="${String(!collapsed)}" aria-label="${collapsed ? '展开设置底栏' : '收起设置底栏'}">`,
+    collapsed ? '▾' : '▴',
+    '</button>',
+    '</div>',
+  ].join('');
+}
+
+function renderComposerSettingsSummaryItem(descriptor) {
+  return [
+    `<span class="composer-settings-mobile-summary-item" data-composer-settings-summary-item="${escapeHtml(descriptor.settingKey)}">`,
+    `<span class="composer-settings-mobile-summary-label">${escapeHtml(descriptor.label)}</span>`,
+    `<span class="composer-settings-mobile-summary-value">${escapeHtml(
+      formatComposerSettingsSummaryValue(descriptor),
+    )}</span>`,
+    '</span>',
+  ].join('');
+}
+
+function formatComposerSettingsSummaryValue(descriptor) {
+  const value =
+    descriptor.kind === 'readonly'
+      ? descriptor.value
+      : descriptor.valueLabel || '默认';
+
+  if (descriptor.settingKey === 'sandbox') {
+    return truncateMiddleText(value, 24);
+  }
+
+  return value;
+}
+
+function truncateMiddleText(value, maxLength = 24) {
+  const normalizedValue = String(value ?? '').trim();
+  if (!normalizedValue || normalizedValue.length <= maxLength) {
+    return normalizedValue || '未提供';
+  }
+
+  const headLength = Math.max(8, Math.ceil((maxLength - 1) / 2));
+  const tailLength = Math.max(4, maxLength - headLength - 1);
+  return `${normalizedValue.slice(0, headLength)}…${normalizedValue.slice(-tailLength)}`;
+}
+
 function renderSettingsSelectControl({
+  settingKey,
   label,
   ariaLabel,
   dataAttribute,
@@ -3338,21 +3562,35 @@ function renderSettingsSelectControl({
   value,
   disabled = false,
   pending = false,
+  valueLabel = '默认',
 }) {
   const normalizedValue = String(value ?? '');
   return [
-    '<div class="approval-mode-group">',
-    `<label class="approval-mode-select-wrap${pending ? ' approval-mode-select-wrap--pending' : ''}">`,
+    `<div class="composer-settings-item composer-settings-item--editable" data-composer-setting="${escapeHtml(settingKey)}">`,
+    '<div class="composer-settings-item-copy">',
+    `<span class="composer-settings-item-label" data-composer-setting-label="${escapeHtml(settingKey)}">${escapeHtml(label)}</span>`,
+    `<span class="composer-settings-item-value" data-composer-setting-value="${escapeHtml(settingKey)}">${escapeHtml(valueLabel || '默认')}</span>`,
+    '</div>',
+    `<label class="composer-settings-select-wrap${pending ? ' composer-settings-select-wrap--pending' : ''}">`,
     `<span class="sr-only">${escapeHtml(ariaLabel)}</span>`,
-    `<select class="approval-mode-select" ${dataAttribute}="true" aria-label="${escapeHtml(ariaLabel)}" title="${escapeHtml(label)}"${disabled ? ' disabled' : ''}>`,
+    `<select class="composer-settings-select approval-mode-select" ${dataAttribute}="true" aria-label="${escapeHtml(ariaLabel)}"${disabled ? ' disabled' : ''}>`,
     (options ?? [])
       .map((option) =>
         renderSettingsSelectOption(option?.value ?? '', option?.label ?? '', normalizedValue),
       )
       .join(''),
     '</select>',
-    '<span class="approval-mode-select-icon" aria-hidden="true">▾</span>',
+    '<span class="composer-settings-select-icon approval-mode-select-icon" aria-hidden="true">▾</span>',
     '</label>',
+    '</div>',
+  ].join('');
+}
+
+function renderSettingsReadonlyControl({ settingKey, label, value }) {
+  return [
+    `<div class="composer-settings-item composer-settings-item--readonly" data-composer-setting="${escapeHtml(settingKey)}">`,
+    `<span class="composer-settings-item-label" data-composer-setting-label="${escapeHtml(settingKey)}">${escapeHtml(label)}</span>`,
+    `<span class="composer-settings-item-value" data-composer-setting-value="${escapeHtml(settingKey)}">${escapeHtml(value)}</span>`,
     '</div>',
   ].join('');
 }
@@ -3975,6 +4213,149 @@ function renderTaskPlanStep(step, index) {
   ].join('');
 }
 
+function syncTaskSummaryBand(node, session, state, mobileViewport = false) {
+  if (!node) {
+    return;
+  }
+
+  if (!session && !state.pendingSessionProjectId) {
+    node.hidden = true;
+    node.innerHTML = '';
+    return;
+  }
+
+  node.hidden = false;
+  node.innerHTML = renderTaskSummaryBand(session, state, { mobileViewport });
+}
+
+function renderTaskSummaryBand(session, state, { mobileViewport = false } = {}) {
+  const summary = summarizeLatestPlan(session);
+  if (!summary) {
+    return [
+      '<div class="task-summary-placeholder">',
+      '<span class="task-summary-placeholder-icon" aria-hidden="true">·</span>',
+      '<span>暂无任务计划</span>',
+      '</div>',
+    ].join('');
+  }
+
+  const collapsed = isTaskSummaryCollapsed(state, session?.id, mobileViewport);
+  return [
+    `<section class="task-summary-band" data-task-summary-collapsed="${String(collapsed)}">`,
+    '<div class="task-summary-band-header">',
+    `<div class="task-summary-band-title">已完成 ${summary.completedCount} 个任务（共 ${summary.total} 个）</div>`,
+    `<button class="task-summary-band-toggle" type="button" data-task-summary-toggle="true" data-task-summary-session-id="${escapeHtml(session?.id ?? '')}" aria-expanded="${String(!collapsed)}">`,
+    collapsed ? '展开任务概览' : '收起任务概览',
+    '</button>',
+    '</div>',
+    summary.explanation
+      ? `<p class="task-summary-band-explanation">${escapeHtml(summary.explanation)}</p>`
+      : '',
+    collapsed ? '' : renderTaskSummaryBreakdown(summary),
+    '</section>',
+  ].join('');
+}
+
+function renderTaskSummaryBreakdown(summary) {
+  return [
+    '<div class="task-summary-breakdown" data-task-summary-breakdown="true">',
+    renderTaskSummaryGroup('completed', '已完成', summary.completedPreview),
+    renderTaskSummaryGroup('running', '进行中', summary.runningPreview),
+    renderTaskSummaryGroup('upcoming', '即将开始', summary.upcomingPreview),
+    '</div>',
+  ].join('');
+}
+
+function renderTaskSummaryGroup(group, title, items) {
+  if (!items.length) {
+    return '';
+  }
+
+  return [
+    `<section class="task-summary-group task-summary-group--${group}" data-task-summary-group="${group}">`,
+    `<div class="task-summary-group-title">${escapeHtml(title)}</div>`,
+    '<div class="task-summary-group-list">',
+    items.map((item) => renderTaskSummaryItem(group, item)).join(''),
+    '</div>',
+    '</section>',
+  ].join('');
+}
+
+function renderTaskSummaryItem(group, item) {
+  return [
+    `<div class="task-summary-item task-summary-item--${group}" data-task-summary-item-group="${group}">`,
+    escapeHtml(item.step),
+    '</div>',
+  ].join('');
+}
+
+function summarizeLatestPlan(session) {
+  const latestPlan = extractLatestTurnPlan(session);
+  if (!latestPlan) {
+    return null;
+  }
+
+  const steps = latestPlan.steps ?? [];
+  const completed = steps.filter((step) => step.status === 'completed');
+  const running = steps.filter((step) => step.status === 'inProgress');
+  const upcoming = steps.filter((step) => step.status !== 'completed' && step.status !== 'inProgress');
+
+  return {
+    total: steps.length,
+    explanation: latestPlan.explanation ?? null,
+    completedCount: completed.length,
+    completedPreview: completed.slice(-2),
+    runningPreview: running.slice(0, 1),
+    upcomingPreview: upcoming.slice(0, 2),
+  };
+}
+
+function isTaskSummaryCollapsed(state, sessionId, mobileViewport = false) {
+  const normalizedSessionId = String(sessionId ?? '').trim();
+  if (!normalizedSessionId) {
+    return Boolean(mobileViewport);
+  }
+
+  const explicitState = state?.taskSummaryCollapsedBySession?.[normalizedSessionId];
+  if (typeof explicitState === 'boolean') {
+    return explicitState;
+  }
+
+  return Boolean(mobileViewport);
+}
+
+function getComposerSettingsScopeId(state) {
+  const selectedSessionId = String(state?.selectedSessionId ?? '').trim();
+  if (selectedSessionId) {
+    return `session:${selectedSessionId}`;
+  }
+
+  const pendingProjectId = String(state?.pendingSessionProjectId ?? '').trim();
+  if (pendingProjectId) {
+    return `project:${pendingProjectId}`;
+  }
+
+  return 'global';
+}
+
+function isComposerSettingsCollapsed(state, scopeId = getComposerSettingsScopeId(state), mobileViewport = false) {
+  if (!mobileViewport) {
+    return false;
+  }
+
+  const normalizedScopeId = String(scopeId ?? '').trim();
+  if (!normalizedScopeId) {
+    return true;
+  }
+
+  const explicitState = state?.composerSettingsCollapsedByScope?.[normalizedScopeId];
+  if (typeof explicitState === 'boolean') {
+    return explicitState;
+  }
+
+  return true;
+}
+
 function syncComposerButtons(sendButton, interruptButton, state) {
   const primaryAction = resolveComposerPrimaryAction(state);
 
@@ -4005,18 +4386,18 @@ function resolveComposerPrimaryAction(state) {
   if (canInterruptTurn(state)) {
     return {
       kind: 'interrupt',
-      label: '中断',
+      label: '停止',
       disabled: false,
-      title: '中断当前回合',
+      title: '停止当前回合',
     };
   }
 
   if (status === 'interrupting') {
     return {
       kind: 'interrupting',
-      label: '中断中…',
+      label: '停止中…',
       disabled: true,
-      title: '正在中断当前回合',
+      title: '正在停止当前回合',
     };
   }
 
@@ -4049,7 +4430,7 @@ function syncComposerInput(composerInput, state) {
 
   composerInput.disabled = !isAuthenticatedAppState(state);
   composerInput.placeholder = isAuthenticatedAppState(state)
-    ? '继续这个会话，或者打开历史会话后追问'
+    ? '输入下一步请求'
     : '请输入共享密码后再继续';
 }
 
@@ -4083,9 +4464,79 @@ function syncComposerAttachmentError(container, state) {
   container.textContent = message ?? '';
 }
 
-function syncComposerAttachmentActions(fileButton, imageButton, fileInput, imageInput, state) {
+function syncComposerInlineFeedback(container, state) {
+  if (!container) {
+    return;
+  }
+
+  const message = resolveComposerInlineFeedback(state);
+  container.hidden = !message;
+  container.textContent = message ?? '';
+}
+
+function resolveComposerInlineFeedback(state) {
+  if (!isAuthenticatedAppState(state)) {
+    return '登录后即可继续发送。';
+  }
+
+  const sessionId = String(state?.selectedSessionId ?? '').trim();
+  const sessionMeta = sessionId
+    ? state?.sessionDetailsById?.[sessionId] ?? findThreadMeta(state?.projects ?? [], sessionId)
+    : null;
+  const pendingApprovalCount = Number(
+    sessionMeta?.pendingApprovalCount ?? 0,
+  );
+  if (sessionMeta?.waitingOnApproval || pendingApprovalCount > 0) {
+    return '等待审批后可继续发送';
+  }
+
+  const pendingQuestionCount = Number(
+    sessionMeta?.pendingQuestionCount ?? 0,
+  );
+  if (sessionMeta?.waitingOnQuestion || pendingQuestionCount > 0) {
+    return '等待回答当前问题后可继续发送';
+  }
+
+  return null;
+}
+
+function syncComposerAttachmentActions(
+  fileButton,
+  fileActionButton,
+  imageButton,
+  menu,
+  fileInput,
+  imageInput,
+  state,
+) {
   const disabled = !isAuthenticatedAppState(state);
-  for (const element of [fileButton, imageButton, fileInput, imageInput]) {
+  const menuOpen = !disabled && state.composerAttachmentMenuOpen === true;
+
+  if (fileButton) {
+    fileButton.disabled = disabled;
+    fileButton.hidden = false;
+    fileButton.textContent = '+';
+    fileButton.title = '添加附件';
+    fileButton.setAttribute?.('aria-expanded', String(menuOpen));
+  }
+
+  if (fileActionButton) {
+    fileActionButton.disabled = disabled;
+    fileActionButton.hidden = !menuOpen;
+    fileActionButton.textContent = '上传文件';
+  }
+
+  if (imageButton) {
+    imageButton.disabled = disabled;
+    imageButton.hidden = !menuOpen;
+    imageButton.textContent = '上传图片';
+  }
+
+  if (menu) {
+    menu.hidden = !menuOpen;
+  }
+
+  for (const element of [fileInput, imageInput]) {
     if (element) {
       element.disabled = disabled;
     }
@@ -4329,6 +4780,7 @@ function normalizeSessionOptions(options = null) {
     modelOptions: normalizeSessionOptionList(options?.modelOptions),
     reasoningEffortOptions: normalizeSessionOptionList(options?.reasoningEffortOptions),
     defaults: normalizeSessionSettings(options?.defaults),
+    runtimeContext: normalizeSessionRuntimeContext(options?.runtimeContext),
   };
 }
 
@@ -4362,6 +4814,16 @@ function normalizeSessionAttachmentCapabilities(capabilities) {
     maxBytesPerAttachment,
     acceptedMimePatterns,
     supportsNonImageFiles: capabilities.supportsNonImageFiles === true,
+  };
+}
+
+function normalizeSessionRuntimeContext(runtimeContext) {
+  if (!runtimeContext || typeof runtimeContext !== 'object') {
+    return { sandboxMode: null };
+  }
+
+  return {
+    sandboxMode: firstNonEmptyText(runtimeContext.sandboxMode) ?? null,
   };
 }
 
@@ -4505,6 +4967,16 @@ function normalizeSessionOptionList(options) {
     defaultOption,
     ...normalizedOptions.filter((option) => option.value !== ''),
   ];
+}
+
+function resolveSessionOptionLabel(options, value) {
+  const normalizedValue = String(value ?? '');
+  const match = (options ?? []).find((option) => String(option?.value ?? '') === normalizedValue);
+  if (match?.label) {
+    return match.label;
+  }
+
+  return normalizedValue || '默认';
 }
 
 function getSelectedSessionSettings(state) {

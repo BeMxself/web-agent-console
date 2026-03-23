@@ -2030,13 +2030,13 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
   assert.equal(fakeDocument.conversationScroll.scrollTop, 2048);
   await app.sendTurn('continue with the refactor');
   assert.equal(app.getState().composerDraft, '');
-  assert.equal(fakeDocument.sendButton.textContent, '中断');
+  assert.equal(fakeDocument.sendButton.textContent, '停止');
   assert.equal(fakeDocument.sendButton.disabled, false);
   assert.equal(app.getState().turnStatusBySession['thread-1'], 'started');
   assert.equal(fakeDocument.interruptButton.hidden, true);
   await app.interruptTurn();
   assert.equal(app.getState().turnStatusBySession['thread-1'], 'interrupting');
-  assert.equal(fakeDocument.sendButton.textContent, '中断中…');
+  assert.equal(fakeDocument.sendButton.textContent, '停止中…');
   assert.equal(fakeDocument.sendButton.disabled, true);
   fakeEventSource.emit({
     type: 'turn_completed',
@@ -2507,6 +2507,20 @@ test('browser app renders a compact composer task-summary band with expanded pla
             },
             turns: [
               {
+                id: 'turn-0',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'plan',
+                    explanation: '这是更早的计划，不应该驱动摘要带。',
+                    plan: [
+                      { step: '旧计划：只验证旧入口', status: 'completed' },
+                      { step: '旧计划：不会显示在新摘要', status: 'pending' },
+                    ],
+                  },
+                ],
+              },
+              {
                 id: 'turn-1',
                 status: 'completed',
                 items: [
@@ -2521,6 +2535,16 @@ test('browser app renders a compact composer task-summary band with expanded pla
                       { step: '完成移动端折叠态', status: 'pending' },
                       { step: '回归验证', status: 'pending' },
                     ],
+                  },
+                ],
+              },
+              {
+                id: 'turn-2',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'agentMessage',
+                    text: '后续回复没有新的计划更新。',
                   },
                 ],
               },
@@ -2566,12 +2590,15 @@ test('browser app renders a compact composer task-summary band with expanded pla
 
   assert.match(fakeDocument.composer.innerHTML, /已完成 2 个任务（共 6 个）/);
   assert.match(fakeDocument.composer.innerHTML, /data-task-summary-breakdown="true"/);
-  assert.match(fakeDocument.composer.innerHTML, /data-task-summary-group="completed"/);
-  assert.match(fakeDocument.composer.innerHTML, /data-task-summary-group="running"/);
-  assert.match(fakeDocument.composer.innerHTML, /data-task-summary-group="upcoming"/);
-  assert.match(fakeDocument.composer.innerHTML, /已完成[\s\S]*整理现有会话状态入口[\s\S]*补齐紧凑摘要文案/);
-  assert.match(fakeDocument.composer.innerHTML, /进行中[\s\S]*接入运行态动作语义/);
-  assert.match(fakeDocument.composer.innerHTML, /即将开始[\s\S]*收敛附件入口层级[\s\S]*完成移动端折叠态/);
+  assert.doesNotMatch(fakeDocument.composer.innerHTML, /旧计划：只验证旧入口/);
+  assert.doesNotMatch(fakeDocument.composer.innerHTML, /旧计划：不会显示在新摘要/);
+  assert.doesNotMatch(fakeDocument.composer.innerHTML, /后续回复没有新的计划更新/);
+
+  assertTaskSummaryItem(fakeDocument.composer.innerHTML, 'completed', '整理现有会话状态入口');
+  assertTaskSummaryItem(fakeDocument.composer.innerHTML, 'completed', '补齐紧凑摘要文案');
+  assertTaskSummaryItem(fakeDocument.composer.innerHTML, 'running', '接入运行态动作语义');
+  assertTaskSummaryItem(fakeDocument.composer.innerHTML, 'upcoming', '收敛附件入口层级');
+  assertTaskSummaryItem(fakeDocument.composer.innerHTML, 'upcoming', '完成移动端折叠态');
 
   await app.selectSession('thread-2');
 
@@ -2698,7 +2725,7 @@ test('browser app applies the new composer action hierarchy and surfaces blocked
   assert.match(fakeDocument.composer.innerHTML, /等待审批后可继续发送/);
 });
 
-test('browser app renders compact settings metadata including sandbox mode and keeps controls disabled while busy', async () => {
+test('browser app renders compact settings metadata, collapses the mobile settings strip by default, and keeps controls disabled while busy', async () => {
   const fakeDocument = createFakeDocument({ mobile: true });
   const sandboxModeFromSessionOptions = 'sandbox::spec-proof-9f3e7a';
   const app = createAppController({
@@ -2848,29 +2875,28 @@ test('browser app renders compact settings metadata including sandbox mode and k
   assert.match(fakeDocument.composer.innerHTML, /已完成 2 个任务（共 6 个）/);
   assert.match(fakeDocument.composer.innerHTML, /data-task-summary-collapsed="true"/);
   assert.doesNotMatch(fakeDocument.composer.innerHTML, /梳理状态源/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-collapsed="true"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary="true"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-toggle="true"/);
 
-  assert.match(fakeDocument.approvalModeControls.innerHTML, /<div class="composer-settings-row"/);
-  assert.match(
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'model', '模型', 'gpt-5.4');
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'reasoning', '推理强度', '高');
+  assertComposerSetting(
     fakeDocument.approvalModeControls.innerHTML,
-    /<span class="composer-settings-item-label">模型<\/span>\s*<span class="composer-settings-item-value">gpt-5\.4<\/span>/,
+    'sandbox',
+    '沙箱隔离类型',
+    sandboxModeFromSessionOptions,
   );
-  assert.match(
-    fakeDocument.approvalModeControls.innerHTML,
-    /<span class="composer-settings-item-label">推理强度<\/span>\s*<span class="composer-settings-item-value">高<\/span>/,
-  );
-  assert.match(
-    fakeDocument.approvalModeControls.innerHTML,
-    /<span class="composer-settings-item-label">沙箱模式<\/span>\s*<span class="composer-settings-item-value">sandbox::spec-proof-9f3e7a<\/span>/,
-  );
-  assert.match(
-    fakeDocument.approvalModeControls.innerHTML,
-    /<span class="composer-settings-item-label">审批模式<\/span>\s*<span class="composer-settings-item-value">手动审批<\/span>/,
-  );
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'approval', '审批模式', '手动审批');
   assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /workspace-write/);
   assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /title="模型"/);
 
+  app.toggleComposerSettings();
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-collapsed="false"/);
+
   await app.selectSession('thread-2');
 
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-collapsed="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-approval-mode-select="true"[^>]*disabled/);
@@ -5268,7 +5294,7 @@ test('browser app enables send only when a selected session has draft text and n
     payload: { threadId: 'thread-1', turnId: 'turn-2' },
   });
   assert.equal(fakeDocument.sendButton.disabled, false);
-  assert.equal(fakeDocument.sendButton.textContent, '中断');
+  assert.equal(fakeDocument.sendButton.textContent, '停止');
 
   fakeEventSource.emit({
     type: 'turn_completed',
@@ -5290,7 +5316,12 @@ test('shell html removes the generic conversation title and renames panel contro
   assert.match(html, /class="panel-toggle-mobile-glyph" aria-hidden="true">/);
   assert.match(html, /class="panel-toggle-mobile-bar"/);
   assert.match(html, /id="conversation-status"/);
-  assert.match(html, /class="composer-toolbar-secondary"/);
+  assert.match(html, /class="session-dock"/);
+  assert.match(html, /id="session-dock-plan-summary"/);
+  assert.match(html, /class="composer-action-row"/);
+  assert.match(html, /class="composer-footer"/);
+  assert.match(html, /data-composer-attach-trigger="true"/);
+  assert.match(html, /id="composer-inline-feedback"/);
   assert.match(html, /class="sr-only">显示导航跳转按钮</);
   assert.match(html, /class="composer-nav-toggle-icon" aria-hidden="true"><\/span>/);
   assert.doesNotMatch(html, />显示回合跳转按钮</);
@@ -5609,6 +5640,72 @@ test('mobile layout css keeps the conversation pinned to the viewport with a fix
   assert.match(css, /\.mobile-drawer-close\s*\{[^}]*border-radius:\s*999px;/s);
 });
 
+test('mobile composer css collapses settings into a summary strip and keeps the action row compact', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*#composer-input\s*\{[^}]*min-height:\s*(8[0-9]|9[0-9])px;[^}]*max-height:\s*(1[4-9][0-9]|200)px;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.composer-action-row\s*\{[^}]*flex-direction:\s*row;[^}]*align-items:\s*flex-end;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.composer-footer\s*\{[^}]*flex-direction:\s*row;[^}]*align-items:\s*flex-start;/s,
+  );
+  assert.match(
+    css,
+    /\.composer-settings-mobile-shell\s*\{[^}]*display:\s*grid;[^}]*gap:\s*8px;/s,
+  );
+  assert.match(
+    css,
+    /\.composer-settings-mobile-summary\s*\{[^}]*display:\s*flex;[^}]*overflow-x:\s*auto;[^}]*white-space:\s*nowrap;/s,
+  );
+  assert.match(
+    css,
+    /\.composer-settings-mobile-panel\[hidden\]\s*\{[^}]*display:\s*none\s*!important;/s,
+  );
+});
+
+test('mobile conversation css keeps turn cards, plan steps, and message bubbles compact', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.thread-nav\s*\{[^}]*margin-top:\s*(6|7|8)px;[^}]*padding:\s*(6|7|8)px\s+0\s+(1|2|3)px;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.thread-nav-button\s*\{[^}]*padding:\s*(5|6|7)px\s+(8|9|10)px;[^}]*font-size:\s*11px;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.turn-card-header\s*\{[^}]*margin-bottom:\s*(5|6|7|8)px;[^}]*font-size:\s*11px;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.thread-item-card\s*\{[^}]*padding:\s*(8|9)px\s+(10|11)px;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.thread-item-card\s*\{[^}]*margin-bottom:\s*(5|6|7)px;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.task-plan-step\s*\{[^}]*padding:\s*(8|9|10)px\s+(9|10|11)px;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.message-bubble\s*\{[^}]*padding:\s*(8|9|10)px\s+(10|11|12)px;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.message-bubble\s*\{[^}]*margin-bottom:\s*(6|7|8)px;/s,
+  );
+});
+
 test('sidebar css keeps session rows compact and close buttons centered', () => {
   const css = readPublicFile('app.css');
 
@@ -5741,6 +5838,35 @@ function createFakeEventSource() {
   };
 }
 
+function assertTaskSummaryItem(html, group, text) {
+  assert.match(
+    String(html ?? ''),
+    new RegExp(
+      `data-task-summary-item-group="${escapeRegExp(group)}"[\\s\\S]*?${escapeRegExp(text)}`,
+    ),
+  );
+}
+
+function assertComposerSetting(html, key, label, value) {
+  const normalizedHtml = String(html ?? '');
+  assert.match(
+    normalizedHtml,
+    new RegExp(
+      `data-composer-setting-label="${escapeRegExp(key)}"[\\s\\S]*?>${escapeRegExp(label)}<`,
+    ),
+  );
+  assert.match(
+    normalizedHtml,
+    new RegExp(
+      `data-composer-setting-value="${escapeRegExp(key)}"[\\s\\S]*?>${escapeRegExp(value)}<`,
+    ),
+  );
+}
+
+function escapeRegExp(value) {
+  return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -5774,13 +5900,17 @@ function createFakeDocument(options = {}) {
   const activityResizer = createFakeElement();
   const conversationStatus = createFakeElement({ dataset: {} });
   const conversationTitle = createFakeElement({ textContent: '会话视图' });
+  const sessionDockPlanSummary = createFakeElement();
   const composer = createFakeElement();
   const composerAttachments = createFakeElement();
   const composerAttachmentError = createFakeElement();
+  const composerInlineFeedback = createFakeElement();
   const composerInput = createFakeElement({ value: '' });
   const approvalModeControls = createFakeElement();
   const composerUploadFileButton = createFakeElement({ dataset: {} });
+  const composerUploadFileAction = createFakeElement({ dataset: {} });
   const composerUploadImageButton = createFakeElement({ dataset: {} });
+  const composerAttachmentMenu = createFakeElement();
   const composerFileInput = createFakeElement({ files: [], click() {} });
   const composerImageInput = createFakeElement({ files: [], click() {} });
   const conversationNavToggle = createFakeElement({ checked: true });
@@ -5824,13 +5954,17 @@ function createFakeDocument(options = {}) {
     ['#activity-panel-resizer', activityResizer],
     ['#conversation-status', conversationStatus],
     ['#conversation-title', conversationTitle],
+    ['#session-dock-plan-summary', sessionDockPlanSummary],
     ['#composer', composer],
     ['#composer-attachments', composerAttachments],
     ['#composer-attachment-error', composerAttachmentError],
+    ['#composer-inline-feedback', composerInlineFeedback],
     ['#composer-input', composerInput],
     ['#approval-mode-controls', approvalModeControls],
     ['#composer-upload-file', composerUploadFileButton],
+    ['#composer-upload-file-action', composerUploadFileAction],
     ['#composer-upload-image', composerUploadImageButton],
+    ['#composer-attachment-menu', composerAttachmentMenu],
     ['#composer-file-input', composerFileInput],
     ['#composer-image-input', composerImageInput],
     ['#conversation-nav-toggle', conversationNavToggle],
@@ -5842,6 +5976,21 @@ function createFakeDocument(options = {}) {
   ]);
 
   wireConversationMetrics(conversationBody, conversationScroll);
+  wireComposerMarkup({
+    composer,
+    sessionDockPlanSummary,
+    composerAttachments,
+    composerAttachmentError,
+    composerInlineFeedback,
+    approvalModeControls,
+    composerUploadFileButton,
+    composerUploadFileAction,
+    composerUploadImageButton,
+    composerAttachmentMenu,
+    conversationNavToggle,
+    sendButton,
+    interruptButton,
+  });
 
   return {
     appLayout,
@@ -5861,13 +6010,17 @@ function createFakeDocument(options = {}) {
     activityResizer,
     conversationStatus,
     conversationTitle,
+    sessionDockPlanSummary,
     composer,
     composerAttachments,
     composerAttachmentError,
+    composerInlineFeedback,
     composerInput,
     approvalModeControls,
     composerUploadFileButton,
+    composerUploadFileAction,
     composerUploadImageButton,
+    composerAttachmentMenu,
     composerFileInput,
     composerImageInput,
     conversationNavToggle,
@@ -6004,6 +6157,64 @@ function wireConversationMetrics(conversationBody, conversationScroll) {
       const turnCount = (value.match(/data-turn-card="/g) ?? []).length;
       const headerHeight = value.includes('thread-header') ? 280 : 0;
       conversationScroll.scrollHeight = turnCount * 120 + headerHeight;
+    },
+  });
+}
+
+function wireComposerMarkup({
+  composer,
+  sessionDockPlanSummary,
+  composerAttachments,
+  composerAttachmentError,
+  composerInlineFeedback,
+  approvalModeControls,
+  composerUploadFileButton,
+  composerUploadFileAction,
+  composerUploadImageButton,
+  composerAttachmentMenu,
+  conversationNavToggle,
+  sendButton,
+  interruptButton,
+}) {
+  let value = composer.innerHTML ?? '';
+  Object.defineProperty(composer, 'innerHTML', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      const attachmentMenuMarkup =
+        composerAttachmentMenu.hidden
+          ? ''
+          : [
+              '<div id="composer-attachment-menu">',
+              composerUploadFileAction.hidden
+                ? ''
+                : `<button id="composer-upload-file-action">${composerUploadFileAction.textContent}</button>`,
+              composerUploadImageButton.hidden
+                ? ''
+                : `<button id="composer-upload-image">${composerUploadImageButton.textContent}</button>`,
+              '</div>',
+            ].join('');
+      return [
+        sessionDockPlanSummary.hidden ? '' : sessionDockPlanSummary.innerHTML,
+        composerAttachments.hidden ? '' : composerAttachments.innerHTML,
+        `<button id="composer-upload-file" data-composer-attach-trigger="true" data-action="${composerUploadFileButton.dataset.action ?? ''}">${composerUploadFileButton.textContent}</button>`,
+        attachmentMenuMarkup,
+        composerAttachmentError.hidden
+          ? ''
+          : `<p id="composer-attachment-error">${composerAttachmentError.textContent}</p>`,
+        composerInlineFeedback.hidden
+          ? ''
+          : `<p id="composer-inline-feedback">${composerInlineFeedback.textContent}</p>`,
+        approvalModeControls.hidden ? '' : approvalModeControls.innerHTML,
+        `<input id="conversation-nav-toggle"${conversationNavToggle.checked ? ' checked' : ''} />`,
+        `<button id="send-button" data-action="${sendButton.dataset.action ?? ''}">${sendButton.textContent}</button>`,
+        interruptButton.hidden
+          ? ''
+          : `<button id="interrupt-button">${interruptButton.textContent}</button>`,
+      ].join('');
+    },
+    set(nextValue) {
+      value = String(nextValue);
     },
   });
 }
