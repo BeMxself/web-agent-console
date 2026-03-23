@@ -417,11 +417,13 @@ test('session service exposes session options and persists per-session settings'
     const savedSettings = await service.setSessionSettings('thread-1', {
       model: 'gpt-5.4',
       reasoningEffort: null,
+      sandboxMode: 'workspace-write',
     });
 
     assert.deepEqual(options.defaults, {
       model: null,
       reasoningEffort: null,
+      sandboxMode: 'danger-full-access',
     });
     assert.deepEqual(options.modelOptions[0], {
       value: '',
@@ -431,6 +433,11 @@ test('session service exposes session options and persists per-session settings'
       value: '',
       label: '默认',
     });
+    assert.deepEqual(options.sandboxModeOptions, [
+      { value: 'read-only', label: '只读' },
+      { value: 'workspace-write', label: '工作区可写' },
+      { value: 'danger-full-access', label: '完全访问' },
+    ]);
     assert.deepEqual(options.runtimeContext, {
       sandboxMode: 'danger-full-access',
     });
@@ -441,12 +448,14 @@ test('session service exposes session options and persists per-session settings'
     assert.deepEqual(savedSettings, {
       model: 'gpt-5.4',
       reasoningEffort: null,
+      sandboxMode: 'workspace-write',
     });
 
     const persisted = JSON.parse(await readFile(filePath, 'utf8'));
     assert.deepEqual(persisted.threadSettings['thread-1'], {
       model: 'gpt-5.4',
       reasoningEffort: null,
+      sandboxMode: 'workspace-write',
     });
 
     const restoredService = new CodexSessionService({
@@ -456,6 +465,7 @@ test('session service exposes session options and persists per-session settings'
     assert.deepEqual(await restoredService.getSessionSettings('thread-1'), {
       model: 'gpt-5.4',
       reasoningEffort: null,
+      sandboxMode: 'workspace-write',
     });
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -495,10 +505,12 @@ test('session service forwards turn settings and omits default overrides', async
   await service.startTurn('thread-1', 'continue', {
     model: 'gpt-5.4',
     reasoningEffort: 'high',
+    sandboxMode: 'workspace-write',
   });
   await service.startTurn('thread-1', 'use defaults', {
     model: null,
     reasoningEffort: null,
+    sandboxMode: null,
   });
 
   assert.deepEqual(requests[1], {
@@ -508,7 +520,7 @@ test('session service forwards turn settings and omits default overrides', async
       input: [{ type: 'text', text: 'continue' }],
       approvalPolicy: 'on-request',
       sandboxPolicy: {
-        type: 'dangerFullAccess',
+        type: 'workspaceWrite',
       },
       model: 'gpt-5.4',
       reasoningEffort: 'high',

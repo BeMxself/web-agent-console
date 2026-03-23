@@ -1066,21 +1066,25 @@ export function createAppController({
       }
 
       const sessionSettings = normalizeSessionSettings(state.sessionSettingsById[sessionId]);
+      const turnRequestBody = {
+        text: draftText,
+        model: sessionSettings.model,
+        reasoningEffort: sessionSettings.reasoningEffort,
+        attachments: draftAttachments.map((attachment) => ({
+          name: attachment.name,
+          mimeType: attachment.mimeType,
+          size: attachment.size,
+          dataBase64: attachment.dataBase64,
+        })),
+      };
+      if (sessionSettings.sandboxMode) {
+        turnRequestBody.sandboxMode = sessionSettings.sandboxMode;
+      }
 
       const result = await requestProtectedJson(`/api/sessions/${sessionId}/turns`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          text: draftText,
-          model: sessionSettings.model,
-          reasoningEffort: sessionSettings.reasoningEffort,
-          attachments: draftAttachments.map((attachment) => ({
-            name: attachment.name,
-            mimeType: attachment.mimeType,
-            size: attachment.size,
-            dataBase64: attachment.dataBase64,
-          })),
-        }),
+        body: JSON.stringify(turnRequestBody),
       });
       if (!result) {
         return null;
@@ -1494,7 +1498,8 @@ export function createAppController({
       const previousSettings = normalizeSessionSettings(state.sessionSettingsById[targetSessionId]);
       if (
         previousSettings.model === nextSettings.model &&
-        previousSettings.reasoningEffort === nextSettings.reasoningEffort
+        previousSettings.reasoningEffort === nextSettings.reasoningEffort &&
+        previousSettings.sandboxMode === nextSettings.sandboxMode
       ) {
         return previousSettings;
       }
@@ -2060,6 +2065,21 @@ export function createAppController({
           void controller.setSessionSettings(state.selectedSessionId, {
             ...currentSettings,
             reasoningEffort: reasoningSelect.value || null,
+          });
+        });
+      }
+
+      const sandboxSelect = approvalModeControls.querySelector('[data-session-sandbox-select]');
+      if (sandboxSelect) {
+        sandboxSelect.addEventListener('change', () => {
+          if (sandboxSelect.disabled) {
+            return;
+          }
+
+          const currentSettings = getSelectedSessionSettings(state);
+          void controller.setSessionSettings(state.selectedSessionId, {
+            ...currentSettings,
+            sandboxMode: sandboxSelect.value || null,
           });
         });
       }
@@ -3460,8 +3480,8 @@ function renderApprovalModeControls(
   const sessionSettingsDisabled =
     sessionSettingsPending || !canEditSessionSettings(state, selectedSessionId);
   const approvalDisabled = approvalPending || sessionBusy;
-  const sandboxMode =
-    firstNonEmptyText(sessionOptions.runtimeContext?.sandboxMode) ?? '未提供';
+  const sandboxMode = resolveCurrentSandboxMode(sessionOptions, selectedSettings);
+  const sandboxValueLabel = resolveSandboxModeLabel(sessionOptions, sandboxMode);
   const inlineFeedback = [
     sessionSettingsUiState?.error
       ? `<div class="approval-feedback approval-feedback--inline" role="status">${escapeHtml(sessionSettingsUiState.error)}</div>`
@@ -3501,12 +3521,25 @@ function renderApprovalModeControls(
         selectedSettings.reasoningEffort,
       ),
     },
-    {
-      kind: 'readonly',
-      settingKey: 'sandbox',
-      label: '沙箱隔离类型',
-      value: sandboxMode,
-    },
+    sessionOptions.sandboxModeOptions.length
+      ? {
+          kind: 'select',
+          settingKey: 'sandbox',
+          label: '沙箱隔离类型',
+          ariaLabel: '沙箱隔离类型',
+          dataAttribute: 'data-session-sandbox-select',
+          options: sessionOptions.sandboxModeOptions,
+          value: sandboxMode,
+          disabled: sessionSettingsDisabled,
+          pending: sessionSettingsPending,
+          valueLabel: sandboxValueLabel,
+        }
+      : {
+          kind: 'readonly',
+          settingKey: 'sandbox',
+          label: '沙箱隔离类型',
+          value: sandboxValueLabel,
+        },
     {
       kind: 'select',
       settingKey: 'approval',
@@ -3565,51 +3598,50 @@ function renderComposerSettingControl(descriptor) {
 }
 
 function renderComposerSettingsSummary(settingDescriptors, scopeId, collapsed) {
+  const actionButton = collapsed
+    ? `<button class="composer-settings-mobile-toggle" type="button" data-composer-settings-toggle="true" data-composer-settings-scope="${escapeHtml(scopeId)}" aria-expanded="false" aria-label="展开设置底栏">▾</button>`
+    : `<button class="composer-settings-mobile-confirm" type="button" data-composer-settings-toggle="true" data-composer-settings-confirm="true" data-composer-settings-scope="${escapeHtml(scopeId)}" aria-label="确认并收起设置底栏">确认</button>`;
+
   return [
     '<div class="composer-settings-mobile-summary-row">',
     '<div class="composer-settings-mobile-summary" data-composer-settings-summary="true" role="note" aria-label="当前会话设置摘要">',
     settingDescriptors.map((descriptor) => renderComposerSettingsSummaryItem(descriptor)).join(''),
     '</div>',
-    `<button class="composer-settings-mobile-toggle" type="button" data-composer-settings-toggle="true" data-composer-settings-scope="${escapeHtml(scopeId)}" aria-expanded="${String(!collapsed)}" aria-label="${collapsed ? '展开设置底栏' : '收起设置底栏'}">`,
-    collapsed ? '▾' : '▴',
-    '</button>',
+    actionButton,
     '</div>',
   ].join('');
 }
 
 function renderComposerSettingsSummaryItem(descriptor) {
+  const value = formatComposerSettingsSummaryValue(descriptor);
+  const label = `${descriptor.label}：${value}`;
   return [
-    `<span class="composer-settings-mobile-summary-item" data-composer-settings-summary-item="${escapeHtml(descriptor.settingKey)}">`,
-    `<span class="composer-settings-mobile-summary-label">${escapeHtml(descriptor.label)}</span>`,
-    `<span class="composer-settings-mobile-summary-value">${escapeHtml(
-      formatComposerSettingsSummaryValue(descriptor),
-    )}</span>`,
+    `<span class="composer-settings-mobile-summary-item" data-composer-settings-summary-item="${escapeHtml(descriptor.settingKey)}" aria-label="${escapeHtml(label)}">`,
+    `<span class="composer-settings-mobile-summary-icon" data-composer-settings-summary-icon="${escapeHtml(descriptor.settingKey)}" aria-hidden="true">${renderComposerSettingsSummaryIcon(descriptor.settingKey)}</span>`,
+    `<span class="composer-settings-mobile-summary-value">${escapeHtml(value)}</span>`,
     '</span>',
   ].join('');
 }
 
 function formatComposerSettingsSummaryValue(descriptor) {
-  const value =
-    descriptor.kind === 'readonly'
-      ? descriptor.value
-      : descriptor.valueLabel || '默认';
-
-  if (descriptor.settingKey === 'sandbox') {
-    return truncateMiddleText(value, 24);
-  }
-
-  return value;
+  const value = descriptor.kind === 'readonly' ? descriptor.value : descriptor.valueLabel;
+  const fallback = descriptor.kind === 'readonly' ? '未提供' : '默认';
+  return firstNonEmptyText(value) ?? fallback;
 }
 
-function truncateMiddleText(value, maxLength = 24) {
-  const normalizedValue = String(value ?? '').trim();
-  if (!normalizedValue || normalizedValue.length <= maxLength) {
-    return normalizedValue || '未提供';
+function renderComposerSettingsSummaryIcon(settingKey) {
+  switch (settingKey) {
+    case 'model':
+      return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="8" rx="2"></rect><path d="M5.5 13h5"></path></svg>';
+    case 'reasoning':
+      return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v2"></path><path d="M8 11.5v2"></path><path d="M4.1 4.1l1.4 1.4"></path><path d="M10.5 10.5l1.4 1.4"></path><path d="M2.5 8h2"></path><path d="M11.5 8h2"></path><path d="M4.1 11.9l1.4-1.4"></path><path d="M10.5 5.5l1.4-1.4"></path></svg>';
+    case 'sandbox':
+      return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2l4 1.6v3.3c0 2.6-1.6 4.9-4 6-2.4-1.1-4-3.4-4-6V3.8l4-1.6z"></path><path d="M6.6 7.7V6.8a1.4 1.4 0 1 1 2.8 0v0.9"></path><rect x="5.3" y="7.7" width="5.4" height="3.3" rx="1"></rect></svg>';
+    case 'approval':
+      return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.2"></circle><path d="M5.8 8.1l1.4 1.5 3-3.1"></path></svg>';
+    default:
+      return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.2"></circle></svg>';
   }
-
-  const headLength = Math.max(8, Math.ceil((maxLength - 1) / 2));
-  const tailLength = Math.max(4, maxLength - headLength - 1);
-  return `${normalizedValue.slice(0, headLength)}…${normalizedValue.slice(-tailLength)}`;
 }
 
 function renderSettingsSelectControl({
@@ -4818,10 +4850,17 @@ function createInitialSessionOptions() {
 }
 
 function normalizeSessionSettings(settings) {
-  return {
+  const normalized = {
     model: normalizeSessionModel(settings?.model),
     reasoningEffort: normalizeSessionReasoningEffort(settings?.reasoningEffort),
   };
+
+  const sandboxMode = normalizeSessionSandboxMode(settings?.sandboxMode);
+  if (sandboxMode) {
+    normalized.sandboxMode = sandboxMode;
+  }
+
+  return normalized;
 }
 
 function normalizeSessionModel(value) {
@@ -4834,12 +4873,26 @@ function normalizeSessionReasoningEffort(value) {
   return normalized || null;
 }
 
+function normalizeSessionSandboxMode(value) {
+  const normalized = String(value ?? '').trim();
+  if (
+    normalized === 'read-only' ||
+    normalized === 'workspace-write' ||
+    normalized === 'danger-full-access'
+  ) {
+    return normalized;
+  }
+
+  return null;
+}
+
 function normalizeSessionOptions(options = null) {
   return {
     providerId: normalizeSessionProviderId(options?.providerId),
     attachmentCapabilities: normalizeSessionAttachmentCapabilities(options?.attachmentCapabilities),
     modelOptions: normalizeSessionOptionList(options?.modelOptions),
     reasoningEffortOptions: normalizeSessionOptionList(options?.reasoningEffortOptions),
+    sandboxModeOptions: normalizeSessionOptionList(options?.sandboxModeOptions, { includeDefault: false }),
     defaults: normalizeSessionSettings(options?.defaults),
     runtimeContext: normalizeSessionRuntimeContext(options?.runtimeContext),
   };
@@ -4884,7 +4937,7 @@ function normalizeSessionRuntimeContext(runtimeContext) {
   }
 
   return {
-    sandboxMode: firstNonEmptyText(runtimeContext.sandboxMode) ?? null,
+    sandboxMode: normalizeSessionSandboxMode(runtimeContext.sandboxMode),
   };
 }
 
@@ -4999,7 +5052,7 @@ function inferAttachmentLabel(attachment) {
   return '文件附件';
 }
 
-function normalizeSessionOptionList(options) {
+function normalizeSessionOptionList(options, { includeDefault = true } = {}) {
   const normalizedOptions = [];
   const seenValues = new Set();
 
@@ -5012,6 +5065,10 @@ function normalizeSessionOptionList(options) {
     const label = String(option?.label ?? '').trim() || value || '默认';
     normalizedOptions.push({ value, label });
     seenValues.add(value);
+  }
+
+  if (!includeDefault) {
+    return normalizedOptions;
   }
 
   if (!seenValues.has('')) {
@@ -5038,6 +5095,38 @@ function resolveSessionOptionLabel(options, value) {
   }
 
   return normalizedValue || '默认';
+}
+
+function resolveCurrentSandboxMode(sessionOptions, selectedSettings) {
+  return (
+    normalizeSessionSandboxMode(selectedSettings?.sandboxMode) ??
+    normalizeSessionSandboxMode(sessionOptions?.defaults?.sandboxMode) ??
+    normalizeSessionSandboxMode(sessionOptions?.runtimeContext?.sandboxMode) ??
+    normalizeSessionSandboxMode(sessionOptions?.sandboxModeOptions?.[0]?.value)
+  );
+}
+
+function resolveSandboxModeLabel(sessionOptions, value) {
+  const normalizedValue = normalizeSessionSandboxMode(value);
+  if (!normalizedValue) {
+    return '未提供';
+  }
+
+  const optionLabel = resolveSessionOptionLabel(sessionOptions?.sandboxModeOptions, normalizedValue);
+  if (optionLabel !== normalizedValue) {
+    return optionLabel;
+  }
+
+  switch (normalizedValue) {
+    case 'read-only':
+      return '只读';
+    case 'workspace-write':
+      return '工作区可写';
+    case 'danger-full-access':
+      return '完全访问';
+    default:
+      return normalizedValue;
+  }
 }
 
 function getSelectedSessionSettings(state) {

@@ -170,10 +170,15 @@ export function createHttpServer({ provider, publicDir, config = {} }) {
       if (req.method === 'POST' && /^\/api\/sessions\/[^/]+\/settings$/.test(pathname)) {
         const sessionId = decodeURIComponent(pathname.split('/')[3]);
         const body = await readJsonBody(req);
-        const data = await provider.setSessionSettings(sessionId, {
+        const settings = {
           model: body.model ?? null,
           reasoningEffort: body.reasoningEffort ?? null,
-        });
+        };
+        if (Object.prototype.hasOwnProperty.call(body, 'sandboxMode')) {
+          settings.sandboxMode = body.sandboxMode ?? null;
+        }
+
+        const data = await provider.setSessionSettings(sessionId, settings);
         writeJson(res, 200, data);
         return;
       }

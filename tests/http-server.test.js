@@ -691,9 +691,15 @@ test('http server exposes session options and session settings routes', async ()
           { value: '', label: '默认' },
           { value: 'medium', label: '中' },
         ],
+        sandboxModeOptions: [
+          { value: 'read-only', label: '只读' },
+          { value: 'workspace-write', label: '工作区可写' },
+          { value: 'danger-full-access', label: '完全访问' },
+        ],
         defaults: {
           model: null,
           reasoningEffort: null,
+          sandboxMode: 'danger-full-access',
         },
         runtimeContext: {
           sandboxMode: 'danger-full-access',
@@ -705,6 +711,7 @@ test('http server exposes session options and session settings routes', async ()
       return {
         model: 'gpt-5.4',
         reasoningEffort: null,
+        sandboxMode: 'workspace-write',
       };
     },
     async setSessionSettings(threadId, settings) {
@@ -736,9 +743,15 @@ test('http server exposes session options and session settings routes', async ()
       { value: '', label: '默认' },
       { value: 'medium', label: '中' },
     ],
+    sandboxModeOptions: [
+      { value: 'read-only', label: '只读' },
+      { value: 'workspace-write', label: '工作区可写' },
+      { value: 'danger-full-access', label: '完全访问' },
+    ],
     defaults: {
       model: null,
       reasoningEffort: null,
+      sandboxMode: 'danger-full-access',
     },
     runtimeContext: {
       sandboxMode: 'danger-full-access',
@@ -750,17 +763,19 @@ test('http server exposes session options and session settings routes', async ()
   assert.deepEqual(await settingsResponse.json(), {
     model: 'gpt-5.4',
     reasoningEffort: null,
+    sandboxMode: 'workspace-write',
   });
 
   const updateResponse = await fetch(`${baseUrl}/api/sessions/thread-1/settings`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: null, reasoningEffort: 'medium' }),
+    body: JSON.stringify({ model: null, reasoningEffort: 'medium', sandboxMode: 'read-only' }),
   });
   assert.equal(updateResponse.status, 200);
   assert.deepEqual(await updateResponse.json(), {
     model: null,
     reasoningEffort: 'medium',
+    sandboxMode: 'read-only',
   });
 
   assert.deepEqual(calls, [
@@ -772,6 +787,7 @@ test('http server exposes session options and session settings routes', async ()
       settings: {
         model: null,
         reasoningEffort: 'medium',
+        sandboxMode: 'read-only',
       },
     },
   ]);

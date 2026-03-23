@@ -6,10 +6,12 @@ test('normalizeTurnRequestInput preserves legacy turn setting coercion semantics
   assert.deepEqual(normalizeTurnRequestInput('Inspect repo', {
     model: 42,
     reasoningEffort: 'invalid',
+    sandboxMode: 'workspace-write',
   }), {
     text: 'Inspect repo',
     model: '42',
     reasoningEffort: null,
+    sandboxMode: 'workspace-write',
     attachments: [],
   });
 });
@@ -21,6 +23,7 @@ test('normalizeTurnRequestInput keeps strict validation for object request form'
         text: 'Inspect repo',
         model: 42,
         reasoningEffort: null,
+        sandboxMode: 'workspace-write',
         attachments: [],
       }),
     /optional turn setting values must be strings or null/,
@@ -31,6 +34,7 @@ test('normalizeTurnRequestInput keeps strict validation for object request form'
       text: 'Inspect repo',
       model: 'gpt-5.4',
       reasoningEffort: 'high',
+      sandboxMode: 'read-only',
       attachments: [
         {
           name: 'diagram.png',
@@ -44,6 +48,7 @@ test('normalizeTurnRequestInput keeps strict validation for object request form'
       text: 'Inspect repo',
       model: 'gpt-5.4',
       reasoningEffort: 'high',
+      sandboxMode: 'read-only',
       attachments: [
         {
           name: 'diagram.png',

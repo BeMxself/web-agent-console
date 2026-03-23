@@ -30,6 +30,12 @@ import {
   normalizePendingActionRecord,
 } from './runtime-store.js';
 
+const CODEX_SANDBOX_MODE_OPTIONS = Object.freeze([
+  Object.freeze({ value: 'read-only', label: '只读' }),
+  Object.freeze({ value: 'workspace-write', label: '工作区可写' }),
+  Object.freeze({ value: 'danger-full-access', label: '完全访问' }),
+]);
+
 export class CodexSessionService extends SessionService {
   constructor({
     client,
@@ -45,6 +51,11 @@ export class CodexSessionService extends SessionService {
       sessionOptions: {
         ...DEFAULT_SESSION_OPTIONS,
         attachmentCapabilities: CODEX_ATTACHMENT_CAPABILITIES,
+        sandboxModeOptions: CODEX_SANDBOX_MODE_OPTIONS,
+        defaults: {
+          ...DEFAULT_SESSION_OPTIONS.defaults,
+          ...(normalizedSandboxMode ? { sandboxMode: normalizedSandboxMode } : {}),
+        },
         ...(normalizedSandboxMode
           ? {
               runtimeContext: {
@@ -239,7 +250,9 @@ export class CodexSessionService extends SessionService {
     if (this.approvalPolicy) {
       payload.approvalPolicy = this.approvalPolicy;
     }
-    const sandboxPolicy = createSandboxPolicy(this.sandboxMode);
+    const sandboxPolicy = createSandboxPolicy(
+      normalizeSandboxMode(normalizedTurnRequest.sandboxMode) ?? this.sandboxMode,
+    );
     if (sandboxPolicy) {
       payload.sandboxPolicy = sandboxPolicy;
     }
@@ -1047,6 +1060,8 @@ function createSandboxPolicy(sandboxMode) {
   switch (sandboxMode) {
     case 'danger-full-access':
       return { type: 'dangerFullAccess' };
+    case 'workspace-write':
+      return { type: 'workspaceWrite' };
     case 'read-only':
       return {
         type: 'readOnly',

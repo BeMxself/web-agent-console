@@ -929,10 +929,17 @@ export function createDefaultSessionSettings() {
 }
 
 export function normalizeSessionSettings(settings) {
-  return {
+  const normalized = {
     model: normalizeSessionModel(settings?.model),
     reasoningEffort: normalizeSessionReasoningEffort(settings?.reasoningEffort),
   };
+
+  const sandboxMode = normalizeRuntimeSandboxMode(settings?.sandboxMode);
+  if (sandboxMode) {
+    normalized.sandboxMode = sandboxMode;
+  }
+
+  return normalized;
 }
 
 export function cloneSessionSettings(settings) {
@@ -940,6 +947,7 @@ export function cloneSessionSettings(settings) {
   return {
     model: normalized.model,
     reasoningEffort: normalized.reasoningEffort,
+    ...(normalized.sandboxMode ? { sandboxMode: normalized.sandboxMode } : {}),
   };
 }
 
@@ -955,6 +963,13 @@ export function cloneSessionOptions(options) {
     })),
     defaults: cloneSessionSettings(options?.defaults),
   };
+
+  if (Array.isArray(options?.sandboxModeOptions)) {
+    cloned.sandboxModeOptions = options.sandboxModeOptions.map((option) => ({
+      value: option?.value ?? '',
+      label: option?.label ?? '',
+    }));
+  }
 
   const providerId = normalizeProviderId(options?.providerId);
   if (providerId) {
@@ -1180,7 +1195,7 @@ function normalizeSessionReasoningEffort(value) {
 
 function shouldPersistSessionSettings(settings) {
   const normalized = normalizeSessionSettings(settings);
-  return Boolean(normalized.model || normalized.reasoningEffort);
+  return Boolean(normalized.model || normalized.reasoningEffort || normalized.sandboxMode);
 }
 
 function normalizeApprovalRecord(approval) {

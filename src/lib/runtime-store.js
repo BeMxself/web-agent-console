@@ -196,10 +196,17 @@ function normalizeRuntimeSource(source) {
 }
 
 function normalizeThreadSettings(settings) {
-  return {
+  const normalized = {
     model: normalizeOptionalSetting(settings?.model),
     reasoningEffort: normalizeReasoningEffort(settings?.reasoningEffort),
   };
+
+  const sandboxMode = normalizeSandboxMode(settings?.sandboxMode);
+  if (sandboxMode) {
+    normalized.sandboxMode = sandboxMode;
+  }
+
+  return normalized;
 }
 
 function normalizeRealtimeState(realtime) {
@@ -370,6 +377,19 @@ function normalizeOptionalSetting(value) {
 function normalizeReasoningEffort(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   if (normalized === 'low' || normalized === 'medium' || normalized === 'high' || normalized === 'xhigh') {
+    return normalized;
+  }
+
+  return null;
+}
+
+function normalizeSandboxMode(value) {
+  const normalized = normalizeOptionalSetting(value);
+  if (
+    normalized === 'read-only' ||
+    normalized === 'workspace-write' ||
+    normalized === 'danger-full-access'
+  ) {
     return normalized;
   }
 

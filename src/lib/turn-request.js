@@ -3,22 +3,36 @@ export function normalizeTurnRequest(body) {
     throw createTurnRequestError('Turn request body must be a JSON object');
   }
 
-  return {
+  const normalized = {
     text: normalizeTurnText(body.text),
     model: normalizeOptionalString(body.model),
     reasoningEffort: normalizeOptionalString(body.reasoningEffort),
     attachments: normalizeTurnAttachments(body.attachments),
   };
+
+  const sandboxMode = normalizeOptionalSandboxMode(body.sandboxMode);
+  if (sandboxMode) {
+    normalized.sandboxMode = sandboxMode;
+  }
+
+  return normalized;
 }
 
 export function normalizeTurnRequestInput(turnRequestOrText, settings = null) {
   if (typeof turnRequestOrText === 'string') {
-    return {
+    const normalized = {
       text: turnRequestOrText,
       model: normalizeLegacySessionModel(settings?.model),
       reasoningEffort: normalizeLegacySessionReasoningEffort(settings?.reasoningEffort),
       attachments: [],
     };
+
+    const sandboxMode = normalizeLegacySessionSandboxMode(settings?.sandboxMode);
+    if (sandboxMode) {
+      normalized.sandboxMode = sandboxMode;
+    }
+
+    return normalized;
   }
 
   return normalizeTurnRequest(turnRequestOrText);
@@ -82,6 +96,40 @@ function normalizeLegacySessionModel(value) {
 function normalizeLegacySessionReasoningEffort(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   if (normalized === 'low' || normalized === 'medium' || normalized === 'high' || normalized === 'xhigh') {
+    return normalized;
+  }
+
+  return null;
+}
+
+function normalizeLegacySessionSandboxMode(value) {
+  const normalized = String(value ?? '').trim();
+  if (
+    normalized === 'read-only' ||
+    normalized === 'workspace-write' ||
+    normalized === 'danger-full-access'
+  ) {
+    return normalized;
+  }
+
+  return null;
+}
+
+function normalizeOptionalSandboxMode(value) {
+  if (value == null || value === '') {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    throw createTurnRequestError('optional turn setting values must be strings or null');
+  }
+
+  const normalized = value.trim();
+  if (
+    normalized === 'read-only' ||
+    normalized === 'workspace-write' ||
+    normalized === 'danger-full-access'
+  ) {
     return normalized;
   }
 

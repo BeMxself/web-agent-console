@@ -2312,8 +2312,8 @@ test('browser app loads session option catalogs, restores per-session settings, 
   const fakeEventSource = createFakeEventSource();
   const fakeDocument = createFakeDocument();
   const settingsByThread = {
-    'thread-1': { model: 'gpt-5.4', reasoningEffort: null },
-    'thread-2': { model: null, reasoningEffort: 'high' },
+    'thread-1': { model: 'gpt-5.4', reasoningEffort: null, sandboxMode: 'workspace-write' },
+    'thread-2': { model: null, reasoningEffort: 'high', sandboxMode: 'read-only' },
   };
 
   const app = createAppController({
@@ -2380,9 +2380,15 @@ test('browser app loads session option catalogs, restores per-session settings, 
             { value: '', label: '默认' },
             { value: 'high', label: '高' },
           ],
+          sandboxModeOptions: [
+            { value: 'read-only', label: '只读' },
+            { value: 'workspace-write', label: '工作区可写' },
+            { value: 'danger-full-access', label: '完全访问' },
+          ],
           defaults: {
             model: null,
             reasoningEffort: null,
+            sandboxMode: 'danger-full-access',
           },
         });
       }
@@ -2443,22 +2449,27 @@ test('browser app loads session option catalogs, restores per-session settings, 
 
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"/);
   assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /<span class="approval-mode-label">/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="" selected>默认<\/option>/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="gpt-5\.4" selected>gpt-5\.4<\/option>/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="workspace-write" selected>工作区可写<\/option>/);
   assert.deepEqual(app.getState().sessionSettingsById['thread-1'], {
     model: 'gpt-5.4',
     reasoningEffort: null,
+    sandboxMode: 'workspace-write',
   });
 
   await app.selectSession('thread-2');
 
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"[^>]*disabled/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="high" selected>高<\/option>/);
   assert.deepEqual(app.getState().sessionSettingsById['thread-2'], {
     model: null,
     reasoningEffort: 'high',
+    sandboxMode: 'read-only',
   });
 });
 
@@ -2736,7 +2747,7 @@ test('browser app applies the new composer action hierarchy and surfaces blocked
 
 test('browser app renders compact settings metadata, collapses the mobile settings strip by default, and keeps controls disabled while busy', async () => {
   const fakeDocument = createFakeDocument({ mobile: true });
-  const sandboxModeFromSessionOptions = 'sandbox::spec-proof-9f3e7a';
+  const sandboxModeFromSessionOptions = 'workspace-write';
   const app = createAppController({
     fetchImpl: async (url) => {
       if (url === '/api/sessions') {
@@ -2785,9 +2796,15 @@ test('browser app renders compact settings metadata, collapses the mobile settin
             { value: '', label: '默认' },
             { value: 'high', label: '高' },
           ],
+          sandboxModeOptions: [
+            { value: 'read-only', label: '只读' },
+            { value: 'workspace-write', label: '工作区可写' },
+            { value: 'danger-full-access', label: '完全访问' },
+          ],
           defaults: {
             model: null,
             reasoningEffort: null,
+            sandboxMode: 'danger-full-access',
           },
           runtimeContext: {
             sandboxMode: sandboxModeFromSessionOptions,
@@ -2800,11 +2817,11 @@ test('browser app renders compact settings metadata, collapses the mobile settin
       }
 
       if (url === '/api/sessions/thread-1/settings') {
-        return jsonResponse({ model: 'gpt-5.4', reasoningEffort: 'high' });
+        return jsonResponse({ model: 'gpt-5.4', reasoningEffort: 'high', sandboxMode: 'workspace-write' });
       }
 
       if (url === '/api/sessions/thread-2/settings') {
-        return jsonResponse({ model: null, reasoningEffort: null });
+        return jsonResponse({ model: null, reasoningEffort: null, sandboxMode: 'read-only' });
       }
 
       if (url === '/api/sessions/thread-1') {
@@ -2887,6 +2904,11 @@ test('browser app renders compact settings metadata, collapses the mobile settin
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-collapsed="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-toggle="true"/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /composer-settings-mobile-summary-label/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="model"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="reasoning"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="sandbox"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="approval"/);
 
   assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'model', '模型', 'gpt-5.4');
   assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'reasoning', '推理强度', '高');
@@ -2894,20 +2916,26 @@ test('browser app renders compact settings metadata, collapses the mobile settin
     fakeDocument.approvalModeControls.innerHTML,
     'sandbox',
     '沙箱隔离类型',
-    sandboxModeFromSessionOptions,
+    '工作区可写',
   );
   assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'approval', '审批模式', '手动审批');
-  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /workspace-write/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /工作区可写/);
   assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /title="模型"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="模型：gpt-5\.4"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="沙箱隔离类型：工作区可写"/);
 
   app.toggleComposerSettings();
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-collapsed="false"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-confirm="true"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, />确认<\/button>/);
 
   await app.selectSession('thread-2');
 
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-collapsed="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"[^>]*disabled/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-approval-mode-select="true"[^>]*disabled/);
 });
 
@@ -3247,7 +3275,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
   const fakeDocument = createFakeDocument();
   const requests = [];
   let failNextSettingsSave = false;
-  let savedSettings = { model: 'gpt-5.4', reasoningEffort: null };
+  let savedSettings = { model: 'gpt-5.4', reasoningEffort: null, sandboxMode: 'danger-full-access' };
 
   const app = createAppController({
     fetchImpl: async (url, options = {}) => {
@@ -3303,9 +3331,15 @@ test('browser app saves session settings, reverts failures, and sends current tu
             { value: '', label: '默认' },
             { value: 'medium', label: '中' },
           ],
+          sandboxModeOptions: [
+            { value: 'read-only', label: '只读' },
+            { value: 'workspace-write', label: '工作区可写' },
+            { value: 'danger-full-access', label: '完全访问' },
+          ],
           defaults: {
             model: null,
             reasoningEffort: null,
+            sandboxMode: 'danger-full-access',
           },
         });
       }
@@ -3364,27 +3398,32 @@ test('browser app saves session settings, reverts failures, and sends current tu
   const saveResult = await app.setSessionSettings('thread-1', {
     model: null,
     reasoningEffort: 'medium',
+    sandboxMode: 'workspace-write',
   });
 
   assert.deepEqual(saveResult, {
     model: null,
     reasoningEffort: 'medium',
+    sandboxMode: 'workspace-write',
   });
   assert.deepEqual(app.getState().sessionSettingsById['thread-1'], {
     model: null,
     reasoningEffort: 'medium',
+    sandboxMode: 'workspace-write',
   });
 
   failNextSettingsSave = true;
   const failedSave = await app.setSessionSettings('thread-1', {
     model: 'gpt-5.4',
     reasoningEffort: null,
+    sandboxMode: 'read-only',
   });
 
   assert.equal(failedSave, null);
   assert.deepEqual(app.getState().sessionSettingsById['thread-1'], {
     model: null,
     reasoningEffort: 'medium',
+    sandboxMode: 'workspace-write',
   });
   assert.match(fakeDocument.approvalModeControls.innerHTML, /settings failed/);
 
@@ -3398,6 +3437,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
       body: {
         model: null,
         reasoningEffort: 'medium',
+        sandboxMode: 'workspace-write',
       },
     },
     {
@@ -3406,6 +3446,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
       body: {
         model: 'gpt-5.4',
         reasoningEffort: null,
+        sandboxMode: 'read-only',
       },
     },
     {
@@ -3415,6 +3456,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
         text: 'continue',
         model: null,
         reasoningEffort: 'medium',
+        sandboxMode: 'workspace-write',
         attachments: [],
       },
     },
@@ -5778,7 +5820,15 @@ test('mobile composer css collapses settings into a summary strip and keeps the 
   );
   assert.match(
     css,
+    /\.composer-settings-mobile-summary-icon\s*\{[^}]*display:\s*inline-flex;[^}]*width:\s*(14|15|16)px;[^}]*height:\s*(14|15|16)px;/s,
+  );
+  assert.match(
+    css,
     /\.composer-settings-mobile-panel\[hidden\]\s*\{[^}]*display:\s*none\s*!important;/s,
+  );
+  assert.match(
+    css,
+    /\.composer-settings-mobile-confirm\s*\{[^}]*min-height:\s*(34|35|36)px;[^}]*border-radius:\s*(10|11|12)px;/s,
   );
 });
 
