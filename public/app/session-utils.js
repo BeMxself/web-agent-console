@@ -176,6 +176,11 @@ export function normalizeSessionSettings(settings) {
     reasoningEffort: normalizeSessionReasoningEffort(settings?.reasoningEffort),
   };
 
+  const agentType = normalizeSessionAgentType(settings?.agentType);
+  if (agentType) {
+    normalized.agentType = agentType;
+  }
+
   const sandboxMode = normalizeSessionSandboxMode(settings?.sandboxMode);
   if (sandboxMode) {
     normalized.sandboxMode = sandboxMode;
@@ -207,14 +212,21 @@ export function normalizeSessionSandboxMode(value) {
   return null;
 }
 
+export function normalizeSessionAgentType(value) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
+}
+
 export function normalizeSessionOptions(options = null) {
+  const defaults = normalizeSessionSettings(options?.defaults);
   return {
     providerId: normalizeSessionProviderId(options?.providerId),
     attachmentCapabilities: normalizeSessionAttachmentCapabilities(options?.attachmentCapabilities),
     modelOptions: normalizeSessionOptionList(options?.modelOptions),
     reasoningEffortOptions: normalizeSessionOptionList(options?.reasoningEffortOptions),
+    agentTypeOptions: normalizeSessionAgentTypeOptions(options?.agentTypeOptions, defaults.agentType),
     sandboxModeOptions: normalizeSessionOptionList(options?.sandboxModeOptions, { includeDefault: false }),
-    defaults: normalizeSessionSettings(options?.defaults),
+    defaults,
     runtimeContext: normalizeSessionRuntimeContext(options?.runtimeContext),
   };
 }
@@ -408,6 +420,12 @@ export function normalizeSessionOptionList(options, { includeDefault = true } = 
   ];
 }
 
+export function normalizeSessionAgentTypeOptions(options, defaultAgentType = null) {
+  return normalizeSessionOptionList(options, {
+    includeDefault: !normalizeSessionAgentType(defaultAgentType),
+  });
+}
+
 export function resolveSessionOptionLabel(options, value) {
   const normalizedValue = String(value ?? '');
   const match = (options ?? []).find((option) => String(option?.value ?? '') === normalizedValue);
@@ -424,6 +442,13 @@ export function resolveCurrentSandboxMode(sessionOptions, selectedSettings) {
     normalizeSessionSandboxMode(sessionOptions?.defaults?.sandboxMode) ??
     normalizeSessionSandboxMode(sessionOptions?.runtimeContext?.sandboxMode) ??
     normalizeSessionSandboxMode(sessionOptions?.sandboxModeOptions?.[0]?.value)
+  );
+}
+
+export function resolveCurrentAgentType(sessionOptions, selectedSettings) {
+  return (
+    normalizeSessionAgentType(selectedSettings?.agentType) ??
+    normalizeSessionAgentType(sessionOptions?.defaults?.agentType)
   );
 }
 

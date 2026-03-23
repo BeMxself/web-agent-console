@@ -150,6 +150,7 @@ test('session option cloning preserves provider metadata', () => {
     defaults: {
       model: null,
       reasoningEffort: null,
+      agentType: null,
     },
     runtimeContext: {
       sandboxMode: 'danger-full-access',
@@ -169,6 +170,7 @@ test('session option cloning preserves provider metadata', () => {
     defaults: {
       model: null,
       reasoningEffort: null,
+      agentType: null,
     },
     runtimeContext: {
       sandboxMode: 'danger-full-access',

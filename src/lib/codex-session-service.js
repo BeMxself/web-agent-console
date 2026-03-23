@@ -20,6 +20,7 @@ import {
   hasRuntimeSnapshot,
   hasThreadActiveFlag,
   isRuntimeSnapshotActive,
+  normalizeSessionAgentType,
   normalizeRuntimeSnapshot,
   nowInSeconds,
   sanitizeThreadStatus,
@@ -66,6 +67,14 @@ const CODEX_SANDBOX_MODE_OPTIONS = Object.freeze([
   Object.freeze({ value: 'danger-full-access', label: '完全访问' }),
 ]);
 
+const CODEX_AGENT_TYPE_OPTIONS = Object.freeze([
+  Object.freeze({ value: 'default', label: '执行' }),
+  Object.freeze({ value: 'plan', label: '计划' }),
+]);
+
+const DEFAULT_CODEX_COLLABORATION_MODEL =
+  DEFAULT_SESSION_OPTIONS.modelOptions.find((option) => option.value)?.value ?? 'gpt-5.4';
+
 export class CodexSessionService extends SessionService {
   constructor({
     client,
@@ -82,8 +91,10 @@ export class CodexSessionService extends SessionService {
         ...DEFAULT_SESSION_OPTIONS,
         attachmentCapabilities: CODEX_ATTACHMENT_CAPABILITIES,
         sandboxModeOptions: CODEX_SANDBOX_MODE_OPTIONS,
+        agentTypeOptions: CODEX_AGENT_TYPE_OPTIONS,
         defaults: {
           ...DEFAULT_SESSION_OPTIONS.defaults,
+          agentType: 'default',
           ...(normalizedSandboxMode ? { sandboxMode: normalizedSandboxMode } : {}),
         },
         ...(normalizedSandboxMode
@@ -128,6 +139,14 @@ export class CodexSessionService extends SessionService {
     if (cachedThread) {
       this.threadIndex.set(threadId, attachSessionSettings(cachedThread, settings));
     }
+  }
+
+  normalizeSessionSettings(settings) {
+    const normalized = super.normalizeSessionSettings(settings);
+    return {
+      ...normalized,
+      agentType: normalizeCodexAgentType(settings?.agentType, { allowDefault: false }),
+    };
   }
 
   async listSessions() {
@@ -286,11 +305,16 @@ export class CodexSessionService extends SessionService {
     if (sandboxPolicy) {
       payload.sandboxPolicy = sandboxPolicy;
     }
-    if (normalizedTurnRequest.model) {
-      payload.model = normalizedTurnRequest.model;
-    }
-    if (normalizedTurnRequest.reasoningEffort) {
-      payload.reasoningEffort = normalizedTurnRequest.reasoningEffort;
+    const collaborationMode = createCodexCollaborationMode(normalizedTurnRequest);
+    if (collaborationMode) {
+      payload.collaborationMode = collaborationMode;
+    } else {
+      if (normalizedTurnRequest.model) {
+        payload.model = normalizedTurnRequest.model;
+      }
+      if (normalizedTurnRequest.reasoningEffort) {
+        payload.reasoningEffort = normalizedTurnRequest.reasoningEffort;
+      }
     }
 
     return await this.client.request('turn/start', payload);
@@ -705,4 +729,33 @@ export class CodexSessionService extends SessionService {
       .map((thread) => sanitizeThread(thread))
       .filter((thread) => typeof thread?.path === 'string' && thread.path.trim());
   }
+}
+
+function normalizeCodexAgentType(value, { allowDefault = true } = {}) {
+  const normalized = normalizeSessionAgentType(value)?.toLowerCase();
+  if (normalized === 'plan') {
+    return 'plan';
+  }
+
+  if (allowDefault && normalized === 'default') {
+    return 'default';
+  }
+
+  return null;
+}
+
+function createCodexCollaborationMode(turnRequest) {
+  const mode = normalizeCodexAgentType(turnRequest?.agentType);
+  if (!mode) {
+    return null;
+  }
+
+  return {
+    mode,
+    settings: {
+      model: turnRequest?.model ?? DEFAULT_CODEX_COLLABORATION_MODEL,
+      reasoning_effort: turnRequest?.reasoningEffort ?? null,
+      developer_instructions: null,
+    },
+  };
 }

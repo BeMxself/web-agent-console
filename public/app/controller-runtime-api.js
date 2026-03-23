@@ -159,6 +159,7 @@ export function createRuntimeControllerApi(ctx) {
       if (
         previousSettings.model === nextSettings.model &&
         previousSettings.reasoningEffort === nextSettings.reasoningEffort &&
+        previousSettings.agentType === nextSettings.agentType &&
         previousSettings.sandboxMode === nextSettings.sandboxMode
       ) {
         return previousSettings;
@@ -170,10 +171,16 @@ export function createRuntimeControllerApi(ctx) {
       ctx.render();
 
       try {
+        const requestBody = {
+          model: nextSettings.model,
+          reasoningEffort: nextSettings.reasoningEffort,
+          ...(nextSettings.agentType ? { agentType: nextSettings.agentType } : {}),
+          ...(nextSettings.sandboxMode ? { sandboxMode: nextSettings.sandboxMode } : {}),
+        };
         const result = await ctx.requestProtectedJson(`/api/sessions/${targetSessionId}/settings`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(nextSettings),
+          body: JSON.stringify(requestBody),
         });
         if (!result) {
           return null;

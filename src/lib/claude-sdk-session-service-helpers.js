@@ -179,6 +179,10 @@ export function buildQueryOptions({ abortController, canUseTool, cwd, settings, 
     options.effort = settings.reasoningEffort;
   }
 
+  if (settings?.agentType) {
+    options.agent = settings.agentType;
+  }
+
   return options;
 }
 
@@ -507,12 +511,37 @@ export function normalizeClaudeSessionSettings(settings) {
   return {
     model: normalizeSessionModel(settings?.model),
     reasoningEffort: normalizeSessionReasoningEffort(settings?.reasoningEffort),
+    agentType: normalizeClaudeSessionAgentType(settings?.agentType),
   };
 }
 
 export function shouldPersistClaudeSessionSettings(settings) {
   const normalized = normalizeClaudeSessionSettings(settings);
-  return Boolean(normalized.model || normalized.reasoningEffort);
+  return Boolean(normalized.model || normalized.reasoningEffort || normalized.agentType);
+}
+
+export function normalizeClaudeSessionAgentType(value) {
+  return normalizeString(value);
+}
+
+export function normalizeClaudeAgentTypeOptions(agentInfos) {
+  const options = [];
+  const seenValues = new Set();
+
+  for (const agentInfo of agentInfos ?? []) {
+    const value = normalizeClaudeSessionAgentType(agentInfo?.name);
+    if (!value || seenValues.has(value)) {
+      continue;
+    }
+
+    seenValues.add(value);
+    options.push({
+      value,
+      label: value,
+    });
+  }
+
+  return options;
 }
 
 export function normalizeString(value) {

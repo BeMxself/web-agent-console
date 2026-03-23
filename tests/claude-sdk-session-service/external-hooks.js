@@ -29,10 +29,23 @@ test('Claude session service exposes session options and persists per-session se
   const filePath = join(tempDir, 'claude-session-index.json');
   const runtimeStorePath = join(tempDir, 'claude-runtime-store.json');
   const runtimeStore = new RuntimeStore({ filePath: runtimeStorePath });
+  const fakeClaudeSdk = createFakeClaudeSdk({
+    queryResponseFactories: [
+      () => ({
+        async supportedAgents() {
+          return [
+            { name: 'Explore', description: 'Explore the codebase' },
+            { name: 'Plan', description: 'Plan implementation' },
+          ];
+        },
+        async close() {},
+      }),
+    ],
+  });
   const sessionIndex = new ClaudeSdkSessionIndex({ filePath });
   const service = new ClaudeSdkSessionService({
     activityStore: createMemoryActivityStore(),
-    claudeSdk: createFakeClaudeSdk(),
+    claudeSdk: fakeClaudeSdk,
     runtimeStore,
     cwd: '/tmp/default-cwd',
     sessionIndex,
@@ -52,24 +65,32 @@ test('Claude session service exposes session options and persists per-session se
         { value: 'medium', label: '中' },
         { value: 'high', label: '高' },
       ],
+      agentTypeOptions: [
+        { value: 'Explore', label: 'Explore' },
+        { value: 'Plan', label: 'Plan' },
+      ],
       defaults: {
         model: null,
         reasoningEffort: null,
+        agentType: null,
       },
     });
     assert.deepEqual(await service.getSessionSettings('thread-cl-001'), {
       model: null,
       reasoningEffort: null,
+      agentType: null,
     });
 
     assert.deepEqual(
       await service.setSessionSettings('thread-cl-001', {
         model: 'sonnet',
         reasoningEffort: 'high',
+        agentType: 'Plan',
       }),
       {
         model: 'sonnet',
         reasoningEffort: 'high',
+        agentType: 'Plan',
       },
     );
 
@@ -77,6 +98,7 @@ test('Claude session service exposes session options and persists per-session se
     assert.deepEqual(persisted.threadSettings['thread-cl-001'], {
       model: 'sonnet',
       reasoningEffort: 'high',
+      agentType: 'Plan',
     });
 
     const reloadedService = new ClaudeSdkSessionService({
@@ -89,16 +111,19 @@ test('Claude session service exposes session options and persists per-session se
     assert.deepEqual(await reloadedService.getSessionSettings('thread-cl-001'), {
       model: 'sonnet',
       reasoningEffort: 'high',
+      agentType: 'Plan',
     });
 
     assert.deepEqual(
       await service.setSessionSettings('thread-cl-001', {
         model: null,
         reasoningEffort: null,
+        agentType: null,
       }),
       {
         model: null,
         reasoningEffort: null,
+        agentType: null,
       },
     );
 
@@ -525,4 +550,3 @@ test('Stop and StopFailure hooks reconcile external Claude runtime state', async
     await rm(tempDir, { recursive: true, force: true });
   }
 });
-

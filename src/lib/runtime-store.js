@@ -201,6 +201,11 @@ function normalizeThreadSettings(settings) {
     reasoningEffort: normalizeReasoningEffort(settings?.reasoningEffort),
   };
 
+  const agentType = normalizeOptionalSetting(settings?.agentType);
+  if (agentType) {
+    normalized.agentType = agentType;
+  }
+
   const sandboxMode = normalizeSandboxMode(settings?.sandboxMode);
   if (sandboxMode) {
     normalized.sandboxMode = sandboxMode;

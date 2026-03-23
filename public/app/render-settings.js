@@ -5,6 +5,7 @@ import {
   isSessionBusy,
   normalizeApprovalMode,
   normalizeSessionOptions,
+  resolveCurrentAgentType,
   resolveCurrentSandboxMode,
   resolveSandboxModeLabel,
   resolveSessionOptionLabel,
@@ -33,6 +34,8 @@ export function renderApprovalModeControls(
   const sessionSettingsDisabled =
     sessionSettingsPending || !canEditSessionSettings(state, selectedSessionId);
   const approvalDisabled = approvalPending || sessionBusy;
+  const agentType = resolveCurrentAgentType(sessionOptions, selectedSettings);
+  const agentTypeValueLabel = resolveSessionOptionLabel(sessionOptions.agentTypeOptions, agentType);
   const sandboxMode = resolveCurrentSandboxMode(sessionOptions, selectedSettings);
   const sandboxValueLabel = resolveSandboxModeLabel(sessionOptions, sandboxMode);
   const inlineFeedback = [
@@ -74,6 +77,22 @@ export function renderApprovalModeControls(
         selectedSettings.reasoningEffort,
       ),
     },
+    ...(sessionOptions.agentTypeOptions.length
+      ? [
+          {
+            kind: 'select',
+            settingKey: 'agent',
+            label: 'Agent 类型',
+            ariaLabel: 'Agent 类型',
+            dataAttribute: 'data-session-agent-select',
+            options: sessionOptions.agentTypeOptions,
+            value: agentType,
+            disabled: sessionSettingsDisabled,
+            pending: sessionSettingsPending,
+            valueLabel: agentTypeValueLabel,
+          },
+        ]
+      : []),
     sessionOptions.sandboxModeOptions.length
       ? {
           kind: 'select',
@@ -178,6 +197,8 @@ export function renderComposerSettingsSummaryIcon(settingKey) {
       return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="8" rx="2"></rect><path d="M5.5 13h5"></path></svg>';
     case 'reasoning':
       return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v2"></path><path d="M8 11.5v2"></path><path d="M4.1 4.1l1.4 1.4"></path><path d="M10.5 10.5l1.4 1.4"></path><path d="M2.5 8h2"></path><path d="M11.5 8h2"></path><path d="M4.1 11.9l1.4-1.4"></path><path d="M10.5 5.5l1.4-1.4"></path></svg>';
+    case 'agent':
+      return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="4.5" r="1.7"></circle><path d="M8 6.4v2.1"></path><path d="M4.5 13.2V11a1.8 1.8 0 0 1 1.8-1.8h3.4A1.8 1.8 0 0 1 11.5 11v2.2"></path><path d="M2.8 8.4h1.7"></path><path d="M11.5 8.4h1.7"></path></svg>';
     case 'sandbox':
       return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2l4 1.6v3.3c0 2.6-1.6 4.9-4 6-2.4-1.1-4-3.4-4-6V3.8l4-1.6z"></path><path d="M6.6 7.7V6.8a1.4 1.4 0 1 1 2.8 0v0.9"></path><rect x="5.3" y="7.7" width="5.4" height="3.3" rx="1"></rect></svg>';
     case 'approval':

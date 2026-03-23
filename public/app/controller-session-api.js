@@ -292,6 +292,9 @@ export function createSessionControllerApi(ctx) {
           dataBase64: attachment.dataBase64,
         })),
       };
+      if (sessionSettings.agentType) {
+        turnRequestBody.agentType = sessionSettings.agentType;
+      }
       if (sessionSettings.sandboxMode) {
         turnRequestBody.sandboxMode = sessionSettings.sandboxMode;
       }

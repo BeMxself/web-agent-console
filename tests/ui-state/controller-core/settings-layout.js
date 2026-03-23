@@ -19,8 +19,18 @@ test('browser app loads session option catalogs, restores per-session settings, 
   const fakeEventSource = createFakeEventSource();
   const fakeDocument = createFakeDocument();
   const settingsByThread = {
-    'thread-1': { model: 'gpt-5.4', reasoningEffort: null, sandboxMode: 'workspace-write' },
-    'thread-2': { model: null, reasoningEffort: 'high', sandboxMode: 'read-only' },
+    'thread-1': {
+      model: 'gpt-5.4',
+      reasoningEffort: null,
+      agentType: 'plan',
+      sandboxMode: 'workspace-write',
+    },
+    'thread-2': {
+      model: null,
+      reasoningEffort: 'high',
+      agentType: null,
+      sandboxMode: 'read-only',
+    },
   };
 
   const app = createAppController({
@@ -87,6 +97,10 @@ test('browser app loads session option catalogs, restores per-session settings, 
             { value: '', label: '默认' },
             { value: 'high', label: '高' },
           ],
+          agentTypeOptions: [
+            { value: 'default', label: '执行' },
+            { value: 'plan', label: '计划' },
+          ],
           sandboxModeOptions: [
             { value: 'read-only', label: '只读' },
             { value: 'workspace-write', label: '工作区可写' },
@@ -95,6 +109,7 @@ test('browser app loads session option catalogs, restores per-session settings, 
           defaults: {
             model: null,
             reasoningEffort: null,
+            agentType: 'default',
             sandboxMode: 'danger-full-access',
           },
         });
@@ -158,14 +173,17 @@ test('browser app loads session option catalogs, restores per-session settings, 
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-agent-select="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"/);
   assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /<span class="approval-mode-label">/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="" selected>默认<\/option>/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="gpt-5\.4" selected>gpt-5\.4<\/option>/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="plan" selected>计划<\/option>/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="workspace-write" selected>工作区可写<\/option>/);
   assert.deepEqual(app.getState().sessionSettingsById['thread-1'], {
     model: 'gpt-5.4',
     reasoningEffort: null,
+    agentType: 'plan',
     sandboxMode: 'workspace-write',
   });
 
@@ -173,6 +191,7 @@ test('browser app loads session option catalogs, restores per-session settings, 
 
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"[^>]*disabled/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-agent-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /<option value="high" selected>高<\/option>/);
   assert.deepEqual(app.getState().sessionSettingsById['thread-2'], {
@@ -506,6 +525,10 @@ test('browser app renders compact settings metadata, collapses the mobile settin
             { value: '', label: '默认' },
             { value: 'high', label: '高' },
           ],
+          agentTypeOptions: [
+            { value: 'default', label: '执行' },
+            { value: 'plan', label: '计划' },
+          ],
           sandboxModeOptions: [
             { value: 'read-only', label: '只读' },
             { value: 'workspace-write', label: '工作区可写' },
@@ -514,6 +537,7 @@ test('browser app renders compact settings metadata, collapses the mobile settin
           defaults: {
             model: null,
             reasoningEffort: null,
+            agentType: 'default',
             sandboxMode: 'danger-full-access',
           },
           runtimeContext: {
@@ -527,11 +551,21 @@ test('browser app renders compact settings metadata, collapses the mobile settin
       }
 
       if (url === '/api/sessions/thread-1/settings') {
-        return jsonResponse({ model: 'gpt-5.4', reasoningEffort: 'high', sandboxMode: 'workspace-write' });
+        return jsonResponse({
+          model: 'gpt-5.4',
+          reasoningEffort: 'high',
+          agentType: 'plan',
+          sandboxMode: 'workspace-write',
+        });
       }
 
       if (url === '/api/sessions/thread-2/settings') {
-        return jsonResponse({ model: null, reasoningEffort: null, sandboxMode: 'read-only' });
+        return jsonResponse({
+          model: null,
+          reasoningEffort: null,
+          agentType: null,
+          sandboxMode: 'read-only',
+        });
       }
 
       if (url === '/api/sessions/thread-1') {
@@ -617,11 +651,13 @@ test('browser app renders compact settings metadata, collapses the mobile settin
   assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /composer-settings-mobile-summary-label/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="model"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="reasoning"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="agent"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="sandbox"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="approval"/);
 
   assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'model', '模型', 'gpt-5.4');
   assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'reasoning', '推理强度', '高');
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'agent', 'Agent 类型', '计划');
   assertComposerSetting(
     fakeDocument.approvalModeControls.innerHTML,
     'sandbox',
@@ -633,6 +669,7 @@ test('browser app renders compact settings metadata, collapses the mobile settin
   assert.match(fakeDocument.approvalModeControls.innerHTML, /工作区可写/);
   assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /title="模型"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="模型：gpt-5\.4"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="Agent 类型：计划"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="沙箱隔离类型：工作区可写"/);
 
   app.toggleComposerSettings();
@@ -645,7 +682,7 @@ test('browser app renders compact settings metadata, collapses the mobile settin
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-collapsed="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"[^>]*disabled/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-agent-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-approval-mode-select="true"[^>]*disabled/);
 });
-

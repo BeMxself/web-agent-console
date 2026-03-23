@@ -35,6 +35,7 @@ export const DEFAULT_SESSION_OPTIONS = Object.freeze({
   defaults: Object.freeze({
     model: null,
     reasoningEffort: null,
+    agentType: null,
   }),
 });
 
@@ -253,6 +254,7 @@ export function createDefaultSessionSettings() {
   return {
     model: null,
     reasoningEffort: null,
+    agentType: null,
   };
 }
 
@@ -260,6 +262,7 @@ export function normalizeSessionSettings(settings) {
   const normalized = {
     model: normalizeSessionModel(settings?.model),
     reasoningEffort: normalizeSessionReasoningEffort(settings?.reasoningEffort),
+    agentType: normalizeSessionAgentType(settings?.agentType),
   };
 
   const sandboxMode = normalizeRuntimeSandboxMode(settings?.sandboxMode);
@@ -275,6 +278,7 @@ export function cloneSessionSettings(settings) {
   return {
     model: normalized.model,
     reasoningEffort: normalized.reasoningEffort,
+    agentType: normalized.agentType,
     ...(normalized.sandboxMode ? { sandboxMode: normalized.sandboxMode } : {}),
   };
 }
@@ -294,6 +298,13 @@ export function cloneSessionOptions(options) {
 
   if (Array.isArray(options?.sandboxModeOptions)) {
     cloned.sandboxModeOptions = options.sandboxModeOptions.map((option) => ({
+      value: option?.value ?? '',
+      label: option?.label ?? '',
+    }));
+  }
+
+  if (Array.isArray(options?.agentTypeOptions)) {
+    cloned.agentTypeOptions = options.agentTypeOptions.map((option) => ({
       value: option?.value ?? '',
       label: option?.label ?? '',
     }));
@@ -521,9 +532,16 @@ export function normalizeSessionReasoningEffort(value) {
   return null;
 }
 
+export function normalizeSessionAgentType(value) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
+}
+
 export function shouldPersistSessionSettings(settings) {
   const normalized = normalizeSessionSettings(settings);
-  return Boolean(normalized.model || normalized.reasoningEffort || normalized.sandboxMode);
+  return Boolean(
+    normalized.model || normalized.reasoningEffort || normalized.agentType || normalized.sandboxMode,
+  );
 }
 
 export function normalizeApprovalRecord(approval) {

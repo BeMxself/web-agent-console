@@ -350,6 +350,10 @@ test('http server exposes session options and session settings routes', async ()
           { value: '', label: '默认' },
           { value: 'medium', label: '中' },
         ],
+        agentTypeOptions: [
+          { value: 'default', label: '执行' },
+          { value: 'plan', label: '计划' },
+        ],
         sandboxModeOptions: [
           { value: 'read-only', label: '只读' },
           { value: 'workspace-write', label: '工作区可写' },
@@ -358,6 +362,7 @@ test('http server exposes session options and session settings routes', async ()
         defaults: {
           model: null,
           reasoningEffort: null,
+          agentType: 'default',
           sandboxMode: 'danger-full-access',
         },
         runtimeContext: {
@@ -370,6 +375,7 @@ test('http server exposes session options and session settings routes', async ()
       return {
         model: 'gpt-5.4',
         reasoningEffort: null,
+        agentType: 'plan',
         sandboxMode: 'workspace-write',
       };
     },
@@ -402,6 +408,10 @@ test('http server exposes session options and session settings routes', async ()
       { value: '', label: '默认' },
       { value: 'medium', label: '中' },
     ],
+    agentTypeOptions: [
+      { value: 'default', label: '执行' },
+      { value: 'plan', label: '计划' },
+    ],
     sandboxModeOptions: [
       { value: 'read-only', label: '只读' },
       { value: 'workspace-write', label: '工作区可写' },
@@ -410,6 +420,7 @@ test('http server exposes session options and session settings routes', async ()
     defaults: {
       model: null,
       reasoningEffort: null,
+      agentType: 'default',
       sandboxMode: 'danger-full-access',
     },
     runtimeContext: {
@@ -422,18 +433,25 @@ test('http server exposes session options and session settings routes', async ()
   assert.deepEqual(await settingsResponse.json(), {
     model: 'gpt-5.4',
     reasoningEffort: null,
+    agentType: 'plan',
     sandboxMode: 'workspace-write',
   });
 
   const updateResponse = await fetch(`${baseUrl}/api/sessions/thread-1/settings`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ model: null, reasoningEffort: 'medium', sandboxMode: 'read-only' }),
+    body: JSON.stringify({
+      model: null,
+      reasoningEffort: 'medium',
+      agentType: 'plan',
+      sandboxMode: 'read-only',
+    }),
   });
   assert.equal(updateResponse.status, 200);
   assert.deepEqual(await updateResponse.json(), {
     model: null,
     reasoningEffort: 'medium',
+    agentType: 'plan',
     sandboxMode: 'read-only',
   });
 
@@ -446,6 +464,7 @@ test('http server exposes session options and session settings routes', async ()
       settings: {
         model: null,
         reasoningEffort: 'medium',
+        agentType: 'plan',
         sandboxMode: 'read-only',
       },
     },

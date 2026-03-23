@@ -397,6 +397,21 @@ export function bindProjectSidebarActions(ctx, root) {
         });
       }
 
+      const agentSelect = approvalModeControls.querySelector('[data-session-agent-select]');
+      if (agentSelect) {
+        agentSelect.addEventListener('change', () => {
+          if (agentSelect.disabled) {
+            return;
+          }
+
+          const currentSettings = getSelectedSessionSettings(ctx.state);
+          void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
+            ...currentSettings,
+            agentType: agentSelect.value || null,
+          });
+        });
+      }
+
       const sandboxSelect = approvalModeControls.querySelector('[data-session-sandbox-select]');
       if (sandboxSelect) {
         sandboxSelect.addEventListener('change', () => {

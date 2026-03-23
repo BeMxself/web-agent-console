@@ -173,6 +173,7 @@ export function createHttpServer({ provider, publicDir, config = {} }) {
         const settings = {
           model: body.model ?? null,
           reasoningEffort: body.reasoningEffort ?? null,
+          agentType: body.agentType ?? null,
         };
         if (Object.prototype.hasOwnProperty.call(body, 'sandboxMode')) {
           settings.sandboxMode = body.sandboxMode ?? null;

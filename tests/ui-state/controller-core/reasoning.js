@@ -20,7 +20,12 @@ test('browser app saves session settings, reverts failures, and sends current tu
   const fakeDocument = createFakeDocument();
   const requests = [];
   let failNextSettingsSave = false;
-  let savedSettings = { model: 'gpt-5.4', reasoningEffort: null, sandboxMode: 'danger-full-access' };
+  let savedSettings = {
+    model: 'gpt-5.4',
+    reasoningEffort: null,
+    agentType: null,
+    sandboxMode: 'danger-full-access',
+  };
 
   const app = createAppController({
     fetchImpl: async (url, options = {}) => {
@@ -76,6 +81,10 @@ test('browser app saves session settings, reverts failures, and sends current tu
             { value: '', label: '默认' },
             { value: 'medium', label: '中' },
           ],
+          agentTypeOptions: [
+            { value: 'default', label: '执行' },
+            { value: 'plan', label: '计划' },
+          ],
           sandboxModeOptions: [
             { value: 'read-only', label: '只读' },
             { value: 'workspace-write', label: '工作区可写' },
@@ -84,6 +93,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
           defaults: {
             model: null,
             reasoningEffort: null,
+            agentType: 'default',
             sandboxMode: 'danger-full-access',
           },
         });
@@ -143,17 +153,20 @@ test('browser app saves session settings, reverts failures, and sends current tu
   const saveResult = await app.setSessionSettings('thread-1', {
     model: null,
     reasoningEffort: 'medium',
+    agentType: 'plan',
     sandboxMode: 'workspace-write',
   });
 
   assert.deepEqual(saveResult, {
     model: null,
     reasoningEffort: 'medium',
+    agentType: 'plan',
     sandboxMode: 'workspace-write',
   });
   assert.deepEqual(app.getState().sessionSettingsById['thread-1'], {
     model: null,
     reasoningEffort: 'medium',
+    agentType: 'plan',
     sandboxMode: 'workspace-write',
   });
 
@@ -161,6 +174,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
   const failedSave = await app.setSessionSettings('thread-1', {
     model: 'gpt-5.4',
     reasoningEffort: null,
+    agentType: null,
     sandboxMode: 'read-only',
   });
 
@@ -168,6 +182,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
   assert.deepEqual(app.getState().sessionSettingsById['thread-1'], {
     model: null,
     reasoningEffort: 'medium',
+    agentType: 'plan',
     sandboxMode: 'workspace-write',
   });
   assert.match(fakeDocument.approvalModeControls.innerHTML, /settings failed/);
@@ -182,6 +197,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
       body: {
         model: null,
         reasoningEffort: 'medium',
+        agentType: 'plan',
         sandboxMode: 'workspace-write',
       },
     },
@@ -201,6 +217,7 @@ test('browser app saves session settings, reverts failures, and sends current tu
         text: 'continue',
         model: null,
         reasoningEffort: 'medium',
+        agentType: 'plan',
         sandboxMode: 'workspace-write',
         attachments: [],
       },

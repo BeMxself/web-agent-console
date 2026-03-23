@@ -6,11 +6,13 @@ test('normalizeTurnRequestInput preserves legacy turn setting coercion semantics
   assert.deepEqual(normalizeTurnRequestInput('Inspect repo', {
     model: 42,
     reasoningEffort: 'invalid',
+    agentType: 123,
     sandboxMode: 'workspace-write',
   }), {
     text: 'Inspect repo',
     model: '42',
     reasoningEffort: null,
+    agentType: '123',
     sandboxMode: 'workspace-write',
     attachments: [],
   });
@@ -23,6 +25,7 @@ test('normalizeTurnRequestInput keeps strict validation for object request form'
         text: 'Inspect repo',
         model: 42,
         reasoningEffort: null,
+        agentType: 42,
         sandboxMode: 'workspace-write',
         attachments: [],
       }),
@@ -34,6 +37,7 @@ test('normalizeTurnRequestInput keeps strict validation for object request form'
       text: 'Inspect repo',
       model: 'gpt-5.4',
       reasoningEffort: 'high',
+      agentType: 'plan',
       sandboxMode: 'read-only',
       attachments: [
         {
@@ -48,6 +52,7 @@ test('normalizeTurnRequestInput keeps strict validation for object request form'
       text: 'Inspect repo',
       model: 'gpt-5.4',
       reasoningEffort: 'high',
+      agentType: 'plan',
       sandboxMode: 'read-only',
       attachments: [
         {

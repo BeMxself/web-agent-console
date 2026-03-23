@@ -36,6 +36,7 @@ test('http server forwards normalized turn requests to the provider', async () =
       text: 'Review these files',
       model: null,
       reasoningEffort: null,
+      agentType: 'plan',
       attachments: [
         {
           name: 'diagram.png',
@@ -55,6 +56,7 @@ test('http server forwards normalized turn requests to the provider', async () =
         text: 'Review these files',
         model: null,
         reasoningEffort: null,
+        agentType: 'plan',
         attachments: [
           {
             name: 'diagram.png',
@@ -91,6 +93,7 @@ test('http server normalizes missing turn attachments to an empty array', async 
       text: 'continue',
       model: null,
       reasoningEffort: null,
+      agentType: 'default',
     }),
   });
   assert.equal(turnResponse.status, 202);
@@ -101,6 +104,7 @@ test('http server normalizes missing turn attachments to an empty array', async 
         text: 'continue',
         model: null,
         reasoningEffort: null,
+        agentType: 'default',
         attachments: [],
       },
     ],

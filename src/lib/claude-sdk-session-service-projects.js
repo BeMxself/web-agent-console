@@ -253,6 +253,7 @@ export async function runTurn(service, {
       settings: {
         model: turnRequest.model,
         reasoningEffort: turnRequest.reasoningEffort,
+        agentType: turnRequest.agentType,
       },
       sessionId: threadRecord.claudeSessionId,
       canUseTool: async (toolName, input, toolOptions = {}) => {
@@ -641,4 +642,3 @@ export async function stopExternalTranscriptWatcher(service, threadId) {
     bridgeMode: 'hooked',
   });
 }
-

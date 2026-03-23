@@ -53,11 +53,13 @@ test('claude sdk provider reconciles active turns on start and forwards subscrip
   const started = await provider.startTurn('thread-1', 'Inspect the repo', {
     model: 1234,
     reasoningEffort: 'not-valid',
+    agentType: 'Plan',
   });
   const startedObjectForm = await provider.startTurn('thread-1', {
     text: 'Inspect the repo attachments',
     model: 'claude-opus-4-1',
     reasoningEffort: 'high',
+    agentType: 'Explore',
     attachments: [
       {
         name: 'diagram.png',
@@ -92,6 +94,7 @@ test('claude sdk provider reconciles active turns on start and forwards subscrip
         text: 'Inspect the repo',
         model: '1234',
         reasoningEffort: null,
+        agentType: 'Plan',
         attachments: [],
       },
     ],
@@ -102,6 +105,7 @@ test('claude sdk provider reconciles active turns on start and forwards subscrip
         text: 'Inspect the repo attachments',
         model: 'claude-opus-4-1',
         reasoningEffort: 'high',
+        agentType: 'Explore',
         attachments: [
           {
             name: 'diagram.png',
@@ -144,12 +148,13 @@ test('claude sdk provider forwards approval, pending-action, and session setting
       return {
         modelOptions: [{ value: '', label: '默认' }],
         reasoningEffortOptions: [{ value: '', label: '默认' }],
-        defaults: { model: null, reasoningEffort: null },
+        agentTypeOptions: [{ value: 'Explore', label: 'Explore' }],
+        defaults: { model: null, reasoningEffort: null, agentType: null },
       };
     },
     async getSessionSettings(threadId) {
       calls.push(['getSessionSettings', threadId]);
-      return { model: 'sonnet', reasoningEffort: 'high' };
+      return { model: 'sonnet', reasoningEffort: 'high', agentType: 'Plan' };
     },
     async setSessionSettings(threadId, settings) {
       calls.push(['setSessionSettings', threadId, settings]);
@@ -193,20 +198,24 @@ test('claude sdk provider forwards approval, pending-action, and session setting
     },
     modelOptions: [{ value: '', label: '默认' }],
     reasoningEffortOptions: [{ value: '', label: '默认' }],
-    defaults: { model: null, reasoningEffort: null },
+    agentTypeOptions: [{ value: 'Explore', label: 'Explore' }],
+    defaults: { model: null, reasoningEffort: null, agentType: null },
   });
   assert.deepEqual(await provider.getSessionSettings('thread-1'), {
     model: 'sonnet',
     reasoningEffort: 'high',
+    agentType: 'Plan',
   });
   assert.deepEqual(
     await provider.setSessionSettings('thread-1', {
       model: 'opus',
       reasoningEffort: 'medium',
+      agentType: 'Explore',
     }),
     {
       model: 'opus',
       reasoningEffort: 'medium',
+      agentType: 'Explore',
     },
   );
   assert.deepEqual(await provider.approveRequest('approval-1'), { decision: 'approved' });
@@ -226,7 +235,7 @@ test('claude sdk provider forwards approval, pending-action, and session setting
     ['setApprovalMode', 'auto'],
     ['getSessionOptions'],
     ['getSessionSettings', 'thread-1'],
-    ['setSessionSettings', 'thread-1', { model: 'opus', reasoningEffort: 'medium' }],
+    ['setSessionSettings', 'thread-1', { model: 'opus', reasoningEffort: 'medium', agentType: 'Explore' }],
     ['approveRequest', 'approval-1'],
     ['denyRequest', 'approval-2'],
     ['resolvePendingAction', 'question-1', { response: 'continue' }],

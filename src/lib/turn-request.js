@@ -7,6 +7,7 @@ export function normalizeTurnRequest(body) {
     text: normalizeTurnText(body.text),
     model: normalizeOptionalString(body.model),
     reasoningEffort: normalizeOptionalString(body.reasoningEffort),
+    agentType: normalizeOptionalString(body.agentType),
     attachments: normalizeTurnAttachments(body.attachments),
   };
 
@@ -24,6 +25,7 @@ export function normalizeTurnRequestInput(turnRequestOrText, settings = null) {
       text: turnRequestOrText,
       model: normalizeLegacySessionModel(settings?.model),
       reasoningEffort: normalizeLegacySessionReasoningEffort(settings?.reasoningEffort),
+      agentType: normalizeLegacySessionAgentType(settings?.agentType),
       attachments: [],
     };
 
@@ -100,6 +102,10 @@ function normalizeLegacySessionReasoningEffort(value) {
   }
 
   return null;
+}
+
+function normalizeLegacySessionAgentType(value) {
+  return normalizeLegacySessionModel(value);
 }
 
 function normalizeLegacySessionSandboxMode(value) {

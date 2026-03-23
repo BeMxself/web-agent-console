@@ -23,11 +23,13 @@ test('shared session service manages persisted settings without a codex client t
     await service.setSessionSettings('thread-1', {
       model: 'gpt-5.4',
       reasoningEffort: 'high',
+      agentType: 'plan',
     });
 
     assert.deepEqual(await service.getSessionSettings('thread-1'), {
       model: 'gpt-5.4',
       reasoningEffort: 'high',
+      agentType: 'plan',
     });
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -417,12 +419,14 @@ test('session service exposes session options and persists per-session settings'
     const savedSettings = await service.setSessionSettings('thread-1', {
       model: 'gpt-5.4',
       reasoningEffort: null,
+      agentType: 'plan',
       sandboxMode: 'workspace-write',
     });
 
     assert.deepEqual(options.defaults, {
       model: null,
       reasoningEffort: null,
+      agentType: 'default',
       sandboxMode: 'danger-full-access',
     });
     assert.deepEqual(options.modelOptions[0], {
@@ -433,6 +437,10 @@ test('session service exposes session options and persists per-session settings'
       value: '',
       label: '默认',
     });
+    assert.deepEqual(options.agentTypeOptions, [
+      { value: 'default', label: '执行' },
+      { value: 'plan', label: '计划' },
+    ]);
     assert.deepEqual(options.sandboxModeOptions, [
       { value: 'read-only', label: '只读' },
       { value: 'workspace-write', label: '工作区可写' },
@@ -444,10 +452,12 @@ test('session service exposes session options and persists per-session settings'
     assert.deepEqual(initialSettings, {
       model: null,
       reasoningEffort: null,
+      agentType: null,
     });
     assert.deepEqual(savedSettings, {
       model: 'gpt-5.4',
       reasoningEffort: null,
+      agentType: 'plan',
       sandboxMode: 'workspace-write',
     });
 
@@ -455,6 +465,7 @@ test('session service exposes session options and persists per-session settings'
     assert.deepEqual(persisted.threadSettings['thread-1'], {
       model: 'gpt-5.4',
       reasoningEffort: null,
+      agentType: 'plan',
       sandboxMode: 'workspace-write',
     });
 
@@ -465,6 +476,7 @@ test('session service exposes session options and persists per-session settings'
     assert.deepEqual(await restoredService.getSessionSettings('thread-1'), {
       model: 'gpt-5.4',
       reasoningEffort: null,
+      agentType: 'plan',
       sandboxMode: 'workspace-write',
     });
   } finally {
@@ -505,6 +517,7 @@ test('session service forwards turn settings and omits default overrides', async
   await service.startTurn('thread-1', 'continue', {
     model: 'gpt-5.4',
     reasoningEffort: 'high',
+    agentType: 'plan',
     sandboxMode: 'workspace-write',
   });
   await service.startTurn('thread-1', 'use defaults', {
@@ -522,8 +535,14 @@ test('session service forwards turn settings and omits default overrides', async
       sandboxPolicy: {
         type: 'workspaceWrite',
       },
-      model: 'gpt-5.4',
-      reasoningEffort: 'high',
+      collaborationMode: {
+        mode: 'plan',
+        settings: {
+          model: 'gpt-5.4',
+          reasoning_effort: 'high',
+          developer_instructions: null,
+        },
+      },
     },
   });
   assert.deepEqual(requests[3], {
@@ -637,4 +656,3 @@ test('session service rejects non-image attachments before starting a codex turn
     },
   ]);
 });
-

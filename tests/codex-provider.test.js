@@ -20,11 +20,13 @@ test('codex provider accepts legacy and object turn request call shapes', async 
   const legacy = await provider.startTurn('thread-1', 'Legacy call', {
     model: 5678,
     reasoningEffort: 'bad-value',
+    agentType: 'plan',
   });
   const objectForm = await provider.startTurn('thread-1', {
     text: 'Object call',
     model: 'gpt-5.4',
     reasoningEffort: 'high',
+    agentType: 'default',
     attachments: [
       {
         name: 'diagram.png',
@@ -45,6 +47,7 @@ test('codex provider accepts legacy and object turn request call shapes', async 
         text: 'Legacy call',
         model: '5678',
         reasoningEffort: null,
+        agentType: 'plan',
         attachments: [],
       },
     ],
@@ -55,6 +58,7 @@ test('codex provider accepts legacy and object turn request call shapes', async 
         text: 'Object call',
         model: 'gpt-5.4',
         reasoningEffort: 'high',
+        agentType: 'default',
         attachments: [
           {
             name: 'diagram.png',

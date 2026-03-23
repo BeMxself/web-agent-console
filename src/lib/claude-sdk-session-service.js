@@ -87,6 +87,7 @@ import {
   normalizeTimestampMs,
   normalizeTimestampSeconds,
   compareProjects,
+  normalizeClaudeAgentTypeOptions,
 } from './claude-sdk-session-service-helpers.js';
 
 import {
@@ -145,6 +146,7 @@ const DEFAULT_SESSION_OPTIONS = Object.freeze({
   defaults: Object.freeze({
     model: null,
     reasoningEffort: null,
+    agentType: null,
   }),
 });
 
@@ -183,6 +185,15 @@ export class ClaudeSdkSessionService extends SessionService {
     return () => {
       this.subscribers.delete(handler);
     };
+  }
+
+  async getSessionOptions() {
+    const options = await super.getSessionOptions();
+    const agentTypeOptions = await this.loadAgentTypeOptions();
+    if (agentTypeOptions.length > 0) {
+      options.agentTypeOptions = agentTypeOptions;
+    }
+    return options;
   }
 
   async listProjects() {
@@ -470,6 +481,36 @@ export class ClaudeSdkSessionService extends SessionService {
 
   normalizeSessionSettings(settings) {
     return normalizeClaudeSessionSettings(settings);
+  }
+
+  async loadAgentTypeOptions() {
+    let queryHandle = null;
+
+    try {
+      queryHandle = this.claudeSdk.query({
+        prompt: '',
+        options: {
+          cwd: this.cwd,
+          permissionMode: 'plan',
+          persistSession: false,
+        },
+      });
+      if (typeof queryHandle?.supportedAgents !== 'function') {
+        return [];
+      }
+
+      return normalizeClaudeAgentTypeOptions(await queryHandle.supportedAgents());
+    } catch {
+      return [];
+    } finally {
+      if (typeof queryHandle?.close === 'function') {
+        try {
+          await queryHandle.close();
+        } catch {
+          // Ignore agent discovery cleanup failures and fall back to the static options.
+        }
+      }
+    }
   }
 
   async handleAskUserQuestion({
