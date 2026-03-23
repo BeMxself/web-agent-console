@@ -2206,6 +2206,7 @@ export function createAppController({
   }
 
   if (documentRef) {
+    const authThemeToggle = documentRef.querySelector('#auth-theme-toggle');
     const loginForm = documentRef.querySelector('#login-form');
     const loginPassword = documentRef.querySelector('#login-password');
     const composer = documentRef.querySelector('#composer');
@@ -2234,6 +2235,10 @@ export function createAppController({
     loginForm?.addEventListener('submit', (event) => {
       event.preventDefault();
       void controller.login(loginPassword?.value ?? '');
+    });
+
+    authThemeToggle?.addEventListener('click', () => {
+      controller.toggleTheme(authThemeToggle.dataset.themeNextTheme);
     });
 
     composer?.addEventListener('submit', (event) => {
@@ -3025,6 +3030,27 @@ function syncTheme(documentRef, appLayout, state) {
   if (documentRef?.documentElement?.dataset) {
     documentRef.documentElement.dataset.theme = theme;
   }
+
+  syncStandaloneThemeToggle(documentRef?.querySelector?.('#auth-theme-toggle'), theme);
+}
+
+function syncStandaloneThemeToggle(button, currentTheme) {
+  if (!button) {
+    return;
+  }
+
+  const theme = normalizeTheme(currentTheme);
+  const nextTheme = theme === 'dark' ? 'light' : 'dark';
+  const toggleLabel = nextTheme === 'dark' ? '切换到暗色主题' : '切换到浅色主题';
+  const toggleIcon = theme === 'dark' ? '☀' : '☾';
+
+  if (button.dataset) {
+    button.dataset.themeNextTheme = nextTheme;
+  }
+
+  button.setAttribute?.('aria-label', toggleLabel);
+  button.setAttribute?.('title', toggleLabel);
+  button.innerHTML = `<span class="auth-theme-toggle-icon" aria-hidden="true">${toggleIcon}</span>`;
 }
 
 function syncPanelToggleButton(button, { collapsed, label }) {
@@ -3348,17 +3374,28 @@ function renderHistoryItem(projectId, session, sectionKind) {
 
   return [
     `<button class="${buttonClass}" type="button" data-project-id="${escapeHtml(projectId)}" data-project-history-add="${escapeHtml(session.id)}">`,
-    renderSessionItemBody(session),
+    renderSessionItemBody(session, {
+      includeSignalPlaceholder: false,
+      titleRowClass: 'session-item-title-row history-item-title-row',
+    }),
     '</button>',
   ].join('');
 }
 
-function renderSessionItemBody(session, { signal = null, showSubtitle = true } = {}) {
+function renderSessionItemBody(
+  session,
+  {
+    signal = null,
+    showSubtitle = true,
+    includeSignalPlaceholder = true,
+    titleRowClass = 'session-item-title-row',
+  } = {},
+) {
   const subtitle = showSubtitle ? getThreadSubtitle(session) : null;
   return [
     '<span class="session-item-inner">',
-    '<span class="session-item-title-row">',
-    renderSessionSignal(signal, { includePlaceholder: true }),
+    `<span class="${escapeHtml(titleRowClass)}">`,
+    renderSessionSignal(signal, { includePlaceholder: includeSignalPlaceholder }),
     `<span class="session-title">${escapeHtml(getThreadTitle(session))}</span>`,
     renderExternalSessionBadge(session),
     '</span>',
@@ -3565,16 +3602,6 @@ function renderApprovalModeControls(
   const controlsMarkup = settingDescriptors
     .map((descriptor) => renderComposerSettingControl(descriptor))
     .join('');
-
-  if (!mobileViewport) {
-    return [
-      '<div class="composer-settings-row" role="group" aria-label="会话与审批设置">',
-      controlsMarkup,
-      inlineFeedback,
-      '</div>',
-    ].join('');
-  }
-
   const scopeId = getComposerSettingsScopeId(state);
   const collapsed = isComposerSettingsCollapsed(state, scopeId, mobileViewport);
 
@@ -4317,19 +4344,15 @@ function syncTaskSummaryBand(node, session, state, mobileViewport = false) {
     return;
   }
 
-  node.hidden = false;
-  node.innerHTML = renderTaskSummaryBand(session, state, { mobileViewport });
+  const markup = renderTaskSummaryBand(session, state, { mobileViewport });
+  node.hidden = !markup;
+  node.innerHTML = markup;
 }
 
 function renderTaskSummaryBand(session, state, { mobileViewport = false } = {}) {
   const summary = summarizeLatestPlan(session);
   if (!summary) {
-    return [
-      '<div class="task-summary-placeholder">',
-      '<span class="task-summary-placeholder-icon" aria-hidden="true">·</span>',
-      '<span>暂无任务计划</span>',
-      '</div>',
-    ].join('');
+    return '';
   }
 
   const collapsed = isTaskSummaryCollapsed(state, session?.id, mobileViewport);
@@ -4432,10 +4455,6 @@ function getComposerSettingsScopeId(state) {
 }
 
 function isComposerSettingsCollapsed(state, scopeId = getComposerSettingsScopeId(state), mobileViewport = false) {
-  if (!mobileViewport) {
-    return false;
-  }
-
   const normalizedScopeId = String(scopeId ?? '').trim();
   if (!normalizedScopeId) {
     return true;
@@ -4525,6 +4544,21 @@ function syncComposerInput(composerInput, state) {
   composerInput.placeholder = isAuthenticatedAppState(state)
     ? '输入下一步请求'
     : '请输入共享密码后再继续';
+  syncComposerInputHeight(composerInput);
+}
+
+function syncComposerInputHeight(composerInput) {
+  if (!composerInput?.style) {
+    return;
+  }
+
+  const minHeight = 52;
+  const maxHeight = 148;
+  const scrollHeight = Number(composerInput.scrollHeight ?? 0);
+  const resolvedHeight = Math.min(maxHeight, Math.max(minHeight, scrollHeight || minHeight));
+
+  composerInput.style.height = `${resolvedHeight}px`;
+  composerInput.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
 }
 
 function syncComposerAttachmentsStrip(container, state) {
@@ -7115,7 +7149,16 @@ function escapeSelectorValue(text) {
   return String(text ?? '').replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 }
 
-if (typeof window !== 'undefined' && window.document) {
+export function shouldAutoBootstrapDocument(documentRef) {
+  const bootstrapFlag =
+    documentRef?.body?.dataset?.webAgentBootstrap ??
+    documentRef?.documentElement?.dataset?.webAgentBootstrap ??
+    null;
+
+  return bootstrapFlag === 'true';
+}
+
+if (typeof window !== 'undefined' && shouldAutoBootstrapDocument(window.document)) {
   const app = createAppController();
   void app.bootstrap();
 }

@@ -429,6 +429,14 @@ test('composer control css keeps session selectors compact, uses an icon nav tog
     css,
     /#interrupt-button\s*\{[^}]*display:\s*none;/s,
   );
+  assert.match(
+    css,
+    /#composer\s+\.composer-attachment-remove\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;[^}]*background:\s*transparent;[^}]*color:\s*#c74a43;[^}]*font-size:\s*(15|16|17)px;/s,
+  );
+  assert.match(
+    css,
+    /\.layout\[data-theme="dark"\]\s+#composer\s+\.composer-attachment-remove\s*\{[^}]*background:\s*transparent;[^}]*color:\s*#ff8f86;/s,
+  );
 });
 
 test('desktop composer css keeps controls on a compact single row when space allows', () => {

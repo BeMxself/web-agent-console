@@ -6,7 +6,7 @@
     <title>Codex Web Console PoC</title>
     <link rel="stylesheet" href="/app.css" />
   </head>
-  <body>
+  <body data-web-agent-bootstrap="true">
     <main id="app-layout" class="layout">
       <aside id="session-list" class="panel panel-scroll"></aside>
       <div
@@ -60,7 +60,7 @@
           <form id="composer" class="session-dock-composer">
             <div class="composer-card">
               <div id="composer-attachments" class="composer-attachments" hidden></div>
-              <textarea id="composer-input" rows="5" placeholder="输入下一步请求"></textarea>
+              <textarea id="composer-input" rows="1" placeholder="输入下一步请求"></textarea>
               <p id="composer-attachment-error" class="composer-attachment-error" hidden></p>
               <p id="composer-inline-feedback" class="composer-inline-feedback" hidden></p>
               <div class="composer-action-row">
@@ -111,8 +111,22 @@
     </main>
     <div id="auth-gate" class="auth-gate" hidden>
       <form id="login-form" class="auth-card">
-        <div class="auth-card-eyebrow">访问控制</div>
-        <h2 class="auth-card-title">输入共享密码</h2>
+        <div class="auth-card-header">
+          <div>
+            <div class="auth-card-eyebrow">访问控制</div>
+            <h2 class="auth-card-title">输入共享密码</h2>
+          </div>
+          <button
+            id="auth-theme-toggle"
+            class="auth-theme-toggle"
+            type="button"
+            data-theme-toggle="true"
+            aria-label="切换到暗色主题"
+            title="切换到暗色主题"
+          >
+            <span class="auth-theme-toggle-icon" aria-hidden="true">☾</span>
+          </button>
+        </div>
         <p class="auth-card-copy">登录后即可继续查看项目、会话和流式活动。</p>
         <label class="auth-field">
           <span>共享密码</span>

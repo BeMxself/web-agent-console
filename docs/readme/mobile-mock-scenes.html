@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>README Mobile Mock Scenes</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23112031'/%3E%3Cpath d='M9 11h14v10H9z' fill='%23f5efe7'/%3E%3Cpath d='M12 14h8M12 18h5' stroke='%232f577a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="../../public/app.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 24px;
+        background:
+          radial-gradient(circle at top, rgba(216, 117, 74, 0.16), transparent 26%),
+          linear-gradient(180deg, #eef3f7, #dce7f1);
+      }
+
+      .screenshot-phone {
+        position: relative;
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        border-radius: 36px;
+        background:
+          radial-gradient(circle at top, rgba(216, 117, 74, 0.16), transparent 28%),
+          linear-gradient(180deg, #f5efe7, #dce7f1);
+        box-shadow:
+          0 28px 80px rgba(17, 32, 49, 0.18),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.78);
+      }
+
+      .screenshot-phone .layout {
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        padding: 0;
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr);
+      }
+
+      .screenshot-phone .panel {
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .screenshot-phone[data-scene="login"] #app-layout {
+        filter: blur(16px) saturate(0.9);
+        transform: scale(1.03);
+        transform-origin: center top;
+      }
+
+      .screenshot-phone .auth-gate {
+        position: absolute;
+        inset: 0;
+      }
+
+      .screenshot-phone dialog {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+      }
+
+      .screenshot-phone dialog::backdrop {
+        display: none;
+      }
+
+      .screenshot-phone .mobile-drawer-frame {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .screenshot-phone .mobile-drawer-shell {
+        min-height: 100%;
+      }
+
+      .screenshot-phone .history-dialog-frame,
+      .screenshot-phone .project-dialog-frame {
+        display: none !important;
+      }
+
+      .readme-scene-label {
+        position: absolute;
+        top: 14px;
+        left: 50%;
+        z-index: 30;
+        transform: translateX(-50%);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        padding: 0 12px;
+        border-radius: 999px;
+        background: rgba(17, 32, 49, 0.68);
+        color: #f8fafc;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        backdrop-filter: blur(10px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screenshot-phone" id="phone-shell" data-scene="login">
+      <div class="readme-scene-label" id="scene-label">README Mock</div>
+      <main id="app-layout" class="layout" data-theme="light">
+        <aside id="session-list" class="panel panel-scroll"></aside>
+        <div id="project-panel-resizer" class="panel-resizer" hidden></div>
+        <section id="conversation-panel" class="panel panel-column">
+          <div class="conversation-header">
+            <button id="project-panel-toggle" class="panel-toggle panel-toggle--left" type="button" aria-expanded="false">
+              <span class="panel-toggle-mobile-glyph" aria-hidden="true">
+                <span class="panel-toggle-mobile-bar"></span>
+                <span class="panel-toggle-mobile-bar"></span>
+                <span class="panel-toggle-mobile-bar"></span>
+              </span>
+            </button>
+            <div class="conversation-header-title">
+              <div id="conversation-title" class="conversation-title"></div>
+            </div>
+            <div id="conversation-status" class="conversation-status conversation-status--connected" role="status" aria-live="polite">
+              <span class="conversation-status-light" aria-hidden="true"></span>
+              <span class="conversation-status-label">在线</span>
+            </div>
+            <button id="activity-panel-toggle" class="panel-toggle panel-toggle--right" type="button" aria-expanded="false">
+              <span class="panel-toggle-label">活动/任务</span>
+            </button>
+          </div>
+          <div id="conversation-scroll" class="panel-scroll-body">
+            <div id="conversation-body"></div>
+          </div>
+          <div id="conversation-nav" class="conversation-nav-slot"></div>
+          <div class="session-dock">
+            <section id="session-dock-plan-summary" class="session-dock-plan-summary" hidden></section>
+            <form id="composer" class="session-dock-composer">
+              <div class="composer-card">
+                <div id="composer-attachments" class="composer-attachments" hidden></div>
+                <textarea id="composer-input" rows="1" placeholder="输入下一步请求"></textarea>
+                <p id="composer-attachment-error" class="composer-attachment-error" hidden></p>
+                <p id="composer-inline-feedback" class="composer-inline-feedback" hidden></p>
+                <div class="composer-action-row">
+                  <div class="composer-action-row-start">
+                    <button
+                      type="button"
+                      id="composer-upload-file"
+                      class="composer-attach-trigger"
+                      data-composer-attach-trigger="true"
+                      aria-label="添加附件"
+                      aria-expanded="false"
+                    >
+                      +
+                    </button>
+                    <div id="composer-attachment-menu" class="composer-attachment-menu" hidden></div>
+                  </div>
+                  <div class="composer-actions">
+                    <button type="submit" id="send-button">发送</button>
+                  </div>
+                </div>
+                <div class="composer-footer">
+                  <div id="approval-mode-controls" class="approval-mode-controls-slot"></div>
+                  <label class="composer-nav-toggle composer-nav-toggle--subtle" title="显示导航跳转按钮">
+                    <input id="conversation-nav-toggle" type="checkbox" checked />
+                    <span class="sr-only">显示导航跳转按钮</span>
+                    <span class="composer-nav-toggle-icon" aria-hidden="true"></span>
+                  </label>
+                </div>
+              </div>
+            </form>
+          </div>
+        </section>
+        <div id="activity-panel-resizer" class="panel-resizer" hidden></div>
+        <aside id="activity-panel" class="panel panel-scroll" hidden></aside>
+      </main>
+
+      <div id="auth-gate" class="auth-gate" hidden>
+        <form id="login-form" class="auth-card">
+          <div class="auth-card-header">
+            <div>
+              <div class="auth-card-eyebrow">访问控制</div>
+              <h2 class="auth-card-title">输入共享密码</h2>
+            </div>
+            <button
+              id="auth-theme-toggle"
+              class="auth-theme-toggle"
+              type="button"
+              data-theme-toggle="true"
+              aria-label="切换到暗色主题"
+              title="切换到暗色主题"
+            >
+              <span class="auth-theme-toggle-icon" aria-hidden="true">☾</span>
+            </button>
+          </div>
+          <p class="auth-card-copy">登录后即可继续查看项目、会话和流式活动。</p>
+          <label class="auth-field">
+            <span>共享密码</span>
+            <input
+              id="login-password"
+              class="auth-input"
+              type="password"
+              name="password"
+              autocomplete="current-password"
+              placeholder="请输入共享密码"
+            />
+          </label>
+          <p id="login-error" class="auth-error" hidden></p>
+          <div class="auth-actions">
+            <button id="login-button" class="dialog-button dialog-button--primary auth-submit" type="submit">登录</button>
+          </div>
+        </form>
+      </div>
+
+      <dialog id="mobile-drawer" class="mobile-drawer-frame"></dialog>
+    </div>
+
+    <script src="../../public/vendor/markdown-it.min.js"></script>
+    <script type="module">
+      import { renderProjectSidebar, renderThreadDetail } from '../../public/app.js';
+
+      const ACTIVITY_PANEL_LABEL = '活动/任务';
+      const scene = new URLSearchParams(window.location.search).get('scene') || 'login';
+      const phoneShell = document.querySelector('#phone-shell');
+      const sceneLabel = document.querySelector('#scene-label');
+      const appLayout = document.querySelector('#app-layout');
+      const sessionList = document.querySelector('#session-list');
+      const conversationTitle = document.querySelector('#conversation-title');
+      const conversationStatus = document.querySelector('#conversation-status');
+      const conversationStatusLabel = conversationStatus.querySelector('.conversation-status-label');
+      const conversationBody = document.querySelector('#conversation-body');
+      const sessionDockPlanSummary = document.querySelector('#session-dock-plan-summary');
+      const composerAttachments = document.querySelector('#composer-attachments');
+      const composerAttachmentMenu = document.querySelector('#composer-attachment-menu');
+      const composerInput = document.querySelector('#composer-input');
+      const composerInlineFeedback = document.querySelector('#composer-inline-feedback');
+      const approvalModeControls = document.querySelector('#approval-mode-controls');
+      const authGate = document.querySelector('#auth-gate');
+      const loginPassword = document.querySelector('#login-password');
+      const mobileDrawer = document.querySelector('#mobile-drawer');
+
+      const systemStatus = {
+        overall: 'connected',
+        backend: { status: 'connected' },
+        relay: { status: 'online' },
+        lastError: null,
+      };
+
+      const imagePreview = `data:image/svg+xml;utf8,${encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#f0b56a" />
+              <stop offset="52%" stop-color="#7fb4d8" />
+              <stop offset="100%" stop-color="#2f577a" />
+            </linearGradient>
+          </defs>
+          <rect width="88" height="88" rx="18" fill="url(#g)" />
+          <circle cx="62" cy="26" r="9" fill="rgba(255,255,255,0.78)" />
+          <path d="M14 64 33 45l14 14 9-9 18 14H14Z" fill="rgba(255,255,255,0.84)" />
+          <path d="M14 70h60" stroke="rgba(17,32,49,0.22)" stroke-width="4" stroke-linecap="round" />
+        </svg>
+      `)}`;
+
+      function createBaseTurnSession(name, overrides = {}) {
+        return {
+          id: overrides.id ?? 'thread-readme-mobile',
+          name,
+          cwd: '/Users/demo/Projects/web-agent-console',
+          turns:
+            overrides.turns ??
+            [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'userMessage',
+                    id: 'item-user-1',
+                    content: [{ type: 'text', text: '帮我补 README 的移动端截图预览。', text_elements: [] }],
+                  },
+                  {
+                    type: 'agentMessage',
+                    id: 'item-agent-1',
+                    phase: 'final_answer',
+                    text: '我先用 mock 数据准备 5 个截图场景，再补到 README。',
+                  },
+                ],
+              },
+            ],
+          ...overrides,
+        };
+      }
+
+      function renderMobileDrawerModeButton(value, label, activeMode) {
+        const selected = value === activeMode;
+        return [
+          `<button class="mobile-drawer-tab${selected ? ' mobile-drawer-tab--selected' : ''}" type="button" role="tab" aria-selected="${String(selected)}" data-mobile-drawer-mode="${value}" aria-pressed="${String(selected)}">`,
+          label,
+          '</button>',
+        ].join('');
+      }
+
+      function renderMobileDrawerMock(state, activeMode = 'sessions') {
+        const body =
+          activeMode === 'activity'
+            ? '<div class="activity-card"><h2>活动 / 任务</h2><p>README 截图场景只展示会话抽屉。</p></div>'
+            : [
+                '<div class="mobile-project-sidebar">',
+                renderProjectSidebar({
+                  ...state,
+                  projectPanelCollapsed: false,
+                  activityPanelCollapsed: false,
+                }),
+                '</div>',
+              ].join('');
+
+        return [
+          '<div class="mobile-drawer-shell">',
+          '<div class="mobile-drawer-header">',
+          '<div class="mobile-drawer-tablist" role="tablist" aria-label="移动抽屉面板">',
+          renderMobileDrawerModeButton('sessions', '会话', activeMode),
+          renderMobileDrawerModeButton('activity', ACTIVITY_PANEL_LABEL, activeMode),
+          '</div>',
+          '<div class="mobile-drawer-header-actions">',
+          '<button class="mobile-drawer-close" type="button" aria-label="关闭抽屉">×</button>',
+          '</div>',
+          '</div>',
+          `<div class="mobile-drawer-body">${body}</div>`,
+          '</div>',
+        ].join('');
+      }
+
+      function renderComposerSettingsSummaryIcon(settingKey) {
+        switch (settingKey) {
+          case 'model':
+            return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="8" rx="2"></rect><path d="M5.5 13h5"></path></svg>';
+          case 'reasoning':
+            return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v2"></path><path d="M8 11.5v2"></path><path d="M4.1 4.1l1.4 1.4"></path><path d="M10.5 10.5l1.4 1.4"></path><path d="M2.5 8h2"></path><path d="M11.5 8h2"></path><path d="M4.1 11.9l1.4-1.4"></path><path d="M10.5 5.5l1.4-1.4"></path></svg>';
+          case 'sandbox':
+            return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.2l4 1.6v3.3c0 2.6-1.6 4.9-4 6-2.4-1.1-4-3.4-4-6V3.8l4-1.6z"></path><path d="M6.6 7.7V6.8a1.4 1.4 0 1 1 2.8 0v0.9"></path><rect x="5.3" y="7.7" width="5.4" height="3.3" rx="1"></rect></svg>';
+          case 'approval':
+            return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.2"></circle><path d="M5.8 8.1l1.4 1.5 3-3.1"></path></svg>';
+          default:
+            return '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.2"></circle></svg>';
+        }
+      }
+
+      function renderSettingsSummaryItem(settingKey, label, value) {
+        const ariaLabel = `${label}：${value}`;
+        return [
+          `<span class="composer-settings-mobile-summary-item" data-composer-settings-summary-item="${settingKey}" aria-label="${ariaLabel}">`,
+          `<span class="composer-settings-mobile-summary-icon" data-composer-settings-summary-icon="${settingKey}" aria-hidden="true">${renderComposerSettingsSummaryIcon(settingKey)}</span>`,
+          `<span class="composer-settings-mobile-summary-value">${value}</span>`,
+          '</span>',
+        ].join('');
+      }
+
+      function renderSettingsSummaryRow() {
+        return [
+          '<div class="composer-settings-mobile-shell" data-composer-settings-collapsed="true">',
+          '<div class="composer-settings-mobile-summary-row">',
+          '<div class="composer-settings-mobile-summary" data-composer-settings-summary="true" role="note" aria-label="当前会话设置摘要">',
+          renderSettingsSummaryItem('model', '模型', 'gpt-5.4'),
+          renderSettingsSummaryItem('reasoning', '推理强度', '高'),
+          renderSettingsSummaryItem('sandbox', '沙箱隔离类型', '工作区可写'),
+          renderSettingsSummaryItem('approval', '审批模式', '手动审批'),
+          '</div>',
+          '<button class="composer-settings-mobile-toggle" type="button" aria-label="展开设置底栏">⌄</button>',
+          '</div>',
+          '</div>',
+        ].join('');
+      }
+
+      function renderTaskSummaryBand() {
+        return [
+          '<section class="task-summary-band" data-task-summary-collapsed="false">',
+          '<div class="task-summary-band-header">',
+          '<div class="task-summary-band-title">已完成 2 个任务（共 6 个）</div>',
+          '<button class="task-summary-band-toggle" type="button" aria-expanded="true">收起任务概览</button>',
+          '</div>',
+          '<p class="task-summary-band-explanation">先固定 mock 场景，再批量截图并补进 README。</p>',
+          '<div class="task-summary-breakdown" data-task-summary-breakdown="true">',
+          '<section class="task-summary-group task-summary-group--completed" data-task-summary-group="completed"><div class="task-summary-group-title">已完成</div><div class="task-summary-group-list"><div class="task-summary-item task-summary-item--completed">整理截图清单</div><div class="task-summary-item task-summary-item--completed">生成移动端 mock 场景</div></div></section>',
+          '<section class="task-summary-group task-summary-group--running" data-task-summary-group="running"><div class="task-summary-group-title">进行中</div><div class="task-summary-group-list"><div class="task-summary-item task-summary-item--running">补 README 说明文案</div></div></section>',
+          '<section class="task-summary-group task-summary-group--upcoming" data-task-summary-group="upcoming"><div class="task-summary-group-title">即将开始</div><div class="task-summary-group-list"><div class="task-summary-item">拍摄 5 张 PNG</div><div class="task-summary-item">检查图片顺序与排版</div></div></section>',
+          '</div>',
+          '</section>',
+        ].join('');
+      }
+
+      function renderAttachmentCard({ name, mimeType, meta, previewText = '', previewUrl = '', kind = 'file', remove = true }) {
+        const preview =
+          kind === 'image'
+            ? `<img class="composer-attachment-thumb" alt="${name}" src="${previewUrl}" />`
+            : `<div class="composer-attachment-placeholder">${kind === 'pdf' ? 'PDF' : 'TXT'}</div>`;
+
+        return [
+          '<div class="composer-attachment-card" role="listitem">',
+          preview,
+          '<div class="composer-attachment-copy">',
+          `<div class="composer-attachment-title">${name}</div>`,
+          `<div class="composer-attachment-meta">${mimeType} · ${meta}</div>`,
+          previewText ? `<div class="composer-attachment-preview">${previewText}</div>` : '',
+          '</div>',
+          remove ? `<button class="composer-attachment-remove" type="button" aria-label="移除 ${name}">×</button>` : '',
+          '</div>',
+        ].join('');
+      }
+
+      function renderAttachmentStrip(cards) {
+        return [`<div class="composer-attachment-strip" role="list">${cards.join('')}</div>`].join('');
+      }
+
+      function setConversationStatus(label, tone = 'connected') {
+        conversationStatus.className = `conversation-status conversation-status--${tone}`;
+        conversationStatus.dataset.statusTone = tone;
+        conversationStatusLabel.textContent = label;
+      }
+
+      function resetScene() {
+        phoneShell.dataset.scene = scene;
+        appLayout.dataset.theme = 'light';
+        appLayout.hidden = false;
+        sessionList.hidden = true;
+        sessionList.innerHTML = '';
+        conversationTitle.hidden = false;
+        conversationTitle.textContent = '';
+        conversationBody.innerHTML = '';
+        sessionDockPlanSummary.hidden = true;
+        sessionDockPlanSummary.innerHTML = '';
+        composerAttachments.hidden = true;
+        composerAttachments.innerHTML = '';
+        composerAttachmentMenu.hidden = true;
+        composerAttachmentMenu.innerHTML = '<button type="button">上传文件</button><button type="button">上传图片</button>';
+        composerInput.value = '';
+        composerInput.style.height = '76px';
+        composerInput.style.overflowY = 'hidden';
+        composerInlineFeedback.hidden = true;
+        composerInlineFeedback.textContent = '';
+        approvalModeControls.innerHTML = renderSettingsSummaryRow();
+        authGate.hidden = true;
+        mobileDrawer.removeAttribute('open');
+        mobileDrawer.innerHTML = '';
+        loginPassword.value = '';
+        setConversationStatus('在线', 'connected');
+      }
+
+      function showConversationScene({ label, title, session, summaryHtml = '', attachmentsHtml = '', inputValue = '', inlineFeedback = '' }) {
+        sceneLabel.textContent = label;
+        conversationTitle.textContent = title;
+        conversationBody.innerHTML = renderThreadDetail(session, null, systemStatus);
+        sessionDockPlanSummary.hidden = !summaryHtml;
+        sessionDockPlanSummary.innerHTML = summaryHtml;
+        composerAttachments.hidden = !attachmentsHtml;
+        composerAttachments.innerHTML = attachmentsHtml;
+        composerInput.value = inputValue;
+        composerInlineFeedback.hidden = !inlineFeedback;
+        composerInlineFeedback.textContent = inlineFeedback;
+      }
+
+      function createSidebarState() {
+        return {
+          systemStatus,
+          theme: 'light',
+          auth: {
+            required: true,
+            authenticated: true,
+            checking: false,
+            pending: false,
+            error: null,
+          },
+          selectedSessionId: 'thread-readme-ui',
+          turnStatusBySession: {
+            'thread-readme-busy': 'started',
+            'thread-readme-plan': 'completed',
+          },
+          unreadBySession: {
+            'thread-readme-plan': 2,
+          },
+          projects: [
+            {
+              id: '/Users/demo/Projects/web-agent-console',
+              cwd: '/Users/demo/Projects/web-agent-console',
+              displayName: 'web-agent-console',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-readme-ui',
+                  name: 'README 移动端截图',
+                  preview: '补 5 张手机端预览图',
+                  updatedAt: 12,
+                },
+                {
+                  id: 'thread-readme-busy',
+                  name: '运行态恢复验证',
+                  preview: '后台正在回放 runtime 状态',
+                  updatedAt: 11,
+                },
+                {
+                  id: 'thread-readme-plan',
+                  name: '会话下半区整理',
+                  preview: '还有新进展未读',
+                  updatedAt: 10,
+                },
+              ],
+              historySessions: {
+                active: [{ id: 'thread-history-1', name: '附件能力梳理', updatedAt: 9 }],
+                archived: [{ id: 'thread-history-2', name: '登录态改造', updatedAt: 8 }],
+              },
+            },
+          ],
+        };
+      }
+
+      function renderBlurredBackground() {
+        sessionList.hidden = false;
+        sessionList.innerHTML = renderProjectSidebar(createSidebarState());
+        const backgroundSession = createBaseTurnSession('README 截图准备', {
+          turns: [
+            {
+              id: 'turn-3',
+              status: 'completed',
+              items: [
+                {
+                  type: 'userMessage',
+                  id: 'item-user-3',
+                  content: [{ type: 'text', text: '准备共享密码登录界面的说明截图。', text_elements: [] }],
+                },
+                {
+                  type: 'agentMessage',
+                  id: 'item-agent-3',
+                  phase: 'final_answer',
+                  text: '我会用 mock 假数据把移动端界面固定下来，再补到 README。',
+                },
+              ],
+            },
+          ],
+        });
+        conversationTitle.textContent = '共享密码登录';
+        conversationBody.innerHTML = renderThreadDetail(backgroundSession, null, systemStatus);
+        composerInput.value = '补 README 预览图';
+      }
+
+      function showLoginScene() {
+        sceneLabel.textContent = '共享密码输入';
+        renderBlurredBackground();
+        authGate.hidden = false;
+        loginPassword.value = 'demo-password';
+      }
+
+      function showSessionsScene() {
+        sceneLabel.textContent = '项目 / 会话选择';
+        appLayout.hidden = true;
+        mobileDrawer.setAttribute('open', 'open');
+        mobileDrawer.innerHTML = renderMobileDrawerMock(createSidebarState(), 'sessions');
+      }
+
+      function showImageScene() {
+        const session = createBaseTurnSession('移动端视觉回归', {
+          turns: [
+            {
+              id: 'turn-4',
+              status: 'completed',
+              items: [
+                {
+                  type: 'userMessage',
+                  id: 'item-user-4',
+                  content: [{ type: 'text', text: '请对比这张界面稿和当前移动端实现。', text_elements: [] }],
+                },
+                {
+                  type: 'agentMessage',
+                  id: 'item-agent-4',
+                  phase: 'final_answer',
+                  text: '我会先看附件图片，再整理需要回归的细节。',
+                },
+              ],
+            },
+          ],
+        });
+
+        showConversationScene({
+          label: '输入图片',
+          title: '移动端视觉回归',
+          session,
+          attachmentsHtml: renderAttachmentStrip([
+            renderAttachmentCard({
+              name: 'mobile-reference.png',
+              mimeType: 'image/png',
+              meta: '128 KB',
+              previewUrl: imagePreview,
+              kind: 'image',
+            }),
+          ]),
+          inputValue: '请对比这张界面稿和当前移动端实现，重点看底栏和任务摘要的紧凑度。',
+        });
+      }
+
+      function showFileScene() {
+        const session = createBaseTurnSession('附件能力梳理', {
+          turns: [
+            {
+              id: 'turn-5',
+              status: 'completed',
+              items: [
+                {
+                  type: 'userMessage',
+                  id: 'item-user-5',
+                  content: [{ type: 'text', text: '把这两份文件一起作为上下文参考。', text_elements: [] }],
+                },
+                {
+                  type: 'agentMessage',
+                  id: 'item-agent-5',
+                  phase: 'final_answer',
+                  text: '我会结合产品说明和接口约束一起整理 README。',
+                },
+              ],
+            },
+          ],
+        });
+
+        showConversationScene({
+          label: '添加文件',
+          title: '附件能力梳理',
+          session,
+          attachmentsHtml: renderAttachmentStrip([
+            renderAttachmentCard({
+              name: 'product-notes.md',
+              mimeType: 'text/markdown',
+              meta: '24 KB',
+              previewText: '记录 README 需要覆盖的能力说明、限制和示例命令。',
+              kind: 'text',
+            }),
+            renderAttachmentCard({
+              name: 'provider-matrix.pdf',
+              mimeType: 'application/pdf',
+              meta: '186 KB',
+              previewText: '整理 codex / claude-sdk / agentapi 的能力差异。',
+              kind: 'pdf',
+            }),
+          ]),
+          inputValue: '请结合这两份文件，补一段面向首次使用者的截图说明。',
+        });
+      }
+
+      function showPlanScene() {
+        const session = createBaseTurnSession('README 截图规划', {
+          turns: [
+            {
+              id: 'turn-6',
+              status: 'started',
+              items: [
+                {
+                  type: 'userMessage',
+                  id: 'item-user-6',
+                  content: [{ type: 'text', text: '按移动端视角梳理截图顺序和展示重点。', text_elements: [] }],
+                },
+                {
+                  type: 'plan',
+                  id: 'item-plan-6',
+                  explanation: '先固定 mock 场景，再拍图并补 README。',
+                  plan: [
+                    { step: '准备共享密码登录场景', status: 'completed' },
+                    { step: '准备会话抽屉场景', status: 'completed' },
+                    { step: '生成附件与任务场景截图', status: 'inProgress' },
+                    { step: '补 README 说明与顺序', status: 'pending' },
+                  ],
+                },
+                {
+                  type: 'agentMessage',
+                  id: 'item-agent-6',
+                  phase: 'commentary',
+                  text: '截图会统一用手机端 mock 假数据，保证 README 看起来稳定一致。',
+                },
+              ],
+            },
+          ],
+        });
+
+        showConversationScene({
+          label: '计划任务',
+          title: 'README 截图规划',
+          session,
+          summaryHtml: renderTaskSummaryBand(),
+          inputValue: '继续按这个顺序补 README，并把 5 张图都放进去。',
+        });
+      }
+
+      resetScene();
+
+      switch (scene) {
+        case 'login':
+          showLoginScene();
+          break;
+        case 'sessions':
+          showSessionsScene();
+          break;
+        case 'image':
+          showImageScene();
+          break;
+        case 'files':
+          showFileScene();
+          break;
+        case 'plan':
+          showPlanScene();
+          break;
+        default:
+          showLoginScene();
+          break;
+      }
+    </script>
+  </body>
+</html>
