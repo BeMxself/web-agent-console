@@ -44,6 +44,7 @@ const initialState = {
   persistPanelPreference: true,
   projectPanelWidth: DEFAULT_PROJECT_PANEL_WIDTH,
   activityPanelWidth: DEFAULT_ACTIVITY_PANEL_WIDTH,
+  theme: 'light',
   showConversationNav: true,
   mobileDrawerOpen: false,
   mobileDrawerMode: 'sessions',
@@ -229,6 +230,11 @@ export function reduceState(state = initialState, action) {
           typeof action.payload?.visible === 'boolean'
             ? action.payload.visible
             : !state.showConversationNav,
+      };
+    case 'theme_changed':
+      return {
+        ...state,
+        theme: normalizeTheme(action.payload?.theme),
       };
     case 'task_summary_visibility_toggled': {
       const sessionId = String(action.payload?.sessionId ?? state.selectedSessionId ?? '').trim();
@@ -1220,6 +1226,16 @@ export function createAppController({
       applyAction({ type: 'conversation_nav_visibility_toggled', payload: { visible } });
       return state.showConversationNav;
     },
+    toggleTheme(nextTheme = null) {
+      const resolvedTheme =
+        typeof nextTheme === 'string' && nextTheme.trim()
+          ? normalizeTheme(nextTheme)
+          : state.theme === 'dark'
+            ? 'light'
+            : 'dark';
+      applyAction({ type: 'theme_changed', payload: { theme: resolvedTheme } });
+      return state.theme;
+    },
     toggleTaskSummary(sessionId = state.selectedSessionId) {
       const targetSessionId = String(sessionId ?? '').trim();
       if (!targetSessionId) {
@@ -1753,6 +1769,12 @@ export function createAppController({
         void controller.logout();
       });
     }
+
+    for (const button of root.querySelectorAll('[data-theme-toggle]')) {
+      button.addEventListener('click', () => {
+        controller.toggleTheme(button.dataset.themeNextTheme);
+      });
+    }
   }
 
   function render() {
@@ -1815,6 +1837,7 @@ export function createAppController({
       error: sessionSettingsUiError,
     };
 
+    syncTheme(documentRef, appLayout, state);
     syncPanelLayout(appLayout, state);
     syncPanelResizer(projectPanelResizer, {
       hidden: state.projectPanelCollapsed,
@@ -1916,6 +1939,8 @@ export function createAppController({
           state.unreadBySession,
           state.turnStatusBySession,
           state.pendingSessionProjectId,
+          state.theme,
+          state.auth?.authenticated ?? false,
           state.loadError,
           state.loadError ? state.systemStatus : null,
         ],
@@ -2398,9 +2423,19 @@ function renderProjectSidebarFooter(state) {
     return '';
   }
 
+  const currentTheme = normalizeTheme(state?.theme);
+  const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  const toggleLabel = nextTheme === 'dark' ? '切换到暗色主题' : '切换到浅色主题';
+  const toggleIcon = currentTheme === 'dark' ? '☀' : '☾';
+
   return [
     '<div class="sidebar-footer">',
+    '<div class="sidebar-footer-actions">',
     '<button class="sidebar-logout-button" type="button" data-logout-button="true">退出登录</button>',
+    `<button class="sidebar-theme-toggle" type="button" data-theme-toggle="true" data-theme-next-theme="${nextTheme}" aria-label="${toggleLabel}" title="${toggleLabel}">`,
+    `<span class="sidebar-theme-toggle-icon" aria-hidden="true">${toggleIcon}</span>`,
+    '</button>',
+    '</div>',
     '</div>',
   ].join('');
 }
@@ -2957,6 +2992,21 @@ function syncPanelLayout(appLayout, state) {
   );
 }
 
+function syncTheme(documentRef, appLayout, state) {
+  const theme = normalizeTheme(state?.theme);
+  if (appLayout?.dataset) {
+    appLayout.dataset.theme = theme;
+  }
+
+  if (documentRef?.body?.dataset) {
+    documentRef.body.dataset.theme = theme;
+  }
+
+  if (documentRef?.documentElement?.dataset) {
+    documentRef.documentElement.dataset.theme = theme;
+  }
+}
+
 function syncPanelToggleButton(button, { collapsed, label }) {
   if (!button) {
     return;
@@ -2998,9 +3048,18 @@ function syncConversationStatus(statusNode, status) {
 
   const normalizedStatus = normalizeSystemStatus(status);
   const tone = getStatusTone(normalizedStatus);
-  statusNode.className = `status-badge-dot status-badge-dot--${tone} conversation-status-dot`;
+  const compactLabel = getCompactStatusLabel(normalizedStatus);
+  const detailedLabel = getStatusLabel(normalizedStatus);
+  statusNode.className = `conversation-status conversation-status--${tone}`;
   statusNode.dataset.statusTone = tone;
-  statusNode.title = normalizedStatus.lastError ?? getStatusLabel(normalizedStatus);
+  statusNode.dataset.statusLabel = compactLabel;
+  statusNode.title = normalizedStatus.lastError ?? detailedLabel;
+  statusNode.textContent = compactLabel;
+  statusNode.innerHTML = [
+    '<span class="conversation-status-light" aria-hidden="true"></span>',
+    `<span class="conversation-status-label">${escapeHtml(compactLabel)}</span>`,
+  ].join('');
+  statusNode.setAttribute?.('aria-label', compactLabel);
   statusNode.hidden = false;
 }
 
@@ -6658,6 +6717,7 @@ function restorePersistentState(baseState, storageImpl) {
     persistPanelPreference: true,
     projectPanelCollapsed: storedPreference.projectPanelCollapsed,
     activityPanelCollapsed: storedPreference.activityPanelCollapsed,
+    theme: normalizeTheme(storedPreference.theme),
   };
 }
 
@@ -6672,6 +6732,7 @@ function syncStoredPanelPreference(storageImpl, state) {
       JSON.stringify({
         projectPanelCollapsed: state.projectPanelCollapsed,
         activityPanelCollapsed: state.activityPanelCollapsed,
+        theme: normalizeTheme(state.theme),
       }),
     );
   } catch {}
@@ -6693,10 +6754,15 @@ function readStoredPanelPreference(storageImpl) {
       persistPanelPreference: true,
       projectPanelCollapsed: Boolean(parsed?.projectPanelCollapsed),
       activityPanelCollapsed: Boolean(parsed?.activityPanelCollapsed),
+      theme: normalizeTheme(parsed?.theme),
     };
   } catch {
     return null;
   }
+}
+
+function normalizeTheme(theme) {
+  return theme === 'dark' ? 'dark' : 'light';
 }
 
 function focusProjectInput(documentRef) {
@@ -6851,6 +6917,19 @@ function getStatusLabel(status) {
   }
 
   return '后端断开';
+}
+
+function getCompactStatusLabel(status) {
+  const tone = getStatusTone(status);
+  if (tone === 'connected') {
+    return '在线';
+  }
+
+  if (tone === 'reconnecting') {
+    return '重连';
+  }
+
+  return '断开';
 }
 
 async function requestJson(fetchImpl, url, options) {

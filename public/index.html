@@ -34,8 +34,11 @@
             </span>
           </button>
           <div class="conversation-header-title">
-            <span id="conversation-status" class="status-badge-dot status-badge-dot--connected conversation-status-dot" aria-hidden="true"></span>
             <div id="conversation-title" class="conversation-title" hidden></div>
+          </div>
+          <div id="conversation-status" class="conversation-status conversation-status--connected" role="status" aria-live="polite">
+            <span class="conversation-status-light" aria-hidden="true"></span>
+            <span class="conversation-status-label">在线</span>
           </div>
           <button
             id="activity-panel-toggle"

@@ -2000,6 +2000,7 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
   assert.equal(fakeDocument.interruptButton.hidden, true);
   assert.equal(fakeDocument.conversationTitle.textContent, '');
   assert.equal(fakeDocument.conversationStatus.dataset.statusTone, 'connected');
+  assert.equal(fakeDocument.conversationStatus.textContent, '在线');
   await app.createProject('/tmp/workspace-b');
   await app.toggleProjectCollapsed('/tmp/workspace-a');
   app.openHistoryDialog('/tmp/workspace-a');
@@ -2011,6 +2012,7 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
     JSON.stringify({
       projectPanelCollapsed: false,
       activityPanelCollapsed: true,
+      theme: 'light',
     }),
   );
   await app.addFocusedSession('/tmp/workspace-a', 'thread-2');
@@ -2019,6 +2021,7 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
   await app.selectSession('thread-1');
   assert.equal(fakeDocument.conversationTitle.textContent, 'Hello session');
   assert.equal(fakeDocument.conversationStatus.dataset.statusTone, 'connected');
+  assert.equal(fakeDocument.conversationStatus.textContent, '在线');
   assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, /thread-status-dot/);
   app.setComposerDraft('continue with the refactor');
   assert.equal(fakeDocument.sendButton.disabled, false);
@@ -5005,6 +5008,7 @@ test('browser app restores remembered panel preferences automatically and persis
     'codex.webAgentConsole.preferences.v1': JSON.stringify({
       projectPanelCollapsed: true,
       activityPanelCollapsed: false,
+      theme: 'light',
     }),
   });
   const app = createAppController({
@@ -5047,6 +5051,7 @@ test('browser app restores remembered panel preferences automatically and persis
   assert.equal(app.getState().activityPanelCollapsed, false);
   assert.equal(fakeDocument.appLayout.dataset.projectPanel, 'collapsed');
   assert.equal(fakeDocument.appLayout.dataset.activityPanel, 'expanded');
+  assert.equal(fakeDocument.appLayout.dataset.theme, 'light');
 
   app.toggleActivityPanel();
 
@@ -5055,6 +5060,7 @@ test('browser app restores remembered panel preferences automatically and persis
     JSON.stringify({
       projectPanelCollapsed: true,
       activityPanelCollapsed: true,
+      theme: 'light',
     }),
   );
 
@@ -5069,6 +5075,73 @@ test('browser app restores remembered panel preferences automatically and persis
     JSON.stringify({
       projectPanelCollapsed: false,
       activityPanelCollapsed: true,
+      theme: 'light',
+    }),
+  );
+});
+
+test('browser app restores remembered dark theme preference and persists theme toggles', async () => {
+  const fakeDocument = createFakeDocument();
+  const fakeStorage = createFakeStorage({
+    'codex.webAgentConsole.preferences.v1': JSON.stringify({
+      projectPanelCollapsed: false,
+      activityPanelCollapsed: true,
+      theme: 'dark',
+    }),
+  });
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: fakeStorage,
+  });
+
+  await app.loadSessions();
+
+  assert.equal(app.getState().theme, 'dark');
+  assert.equal(fakeDocument.appLayout.dataset.theme, 'dark');
+  assert.match(fakeDocument.sessionList.innerHTML, /data-theme-toggle="true"/);
+  assert.match(fakeDocument.sessionList.innerHTML, /aria-label="切换到浅色主题"/);
+  assert.match(fakeDocument.sessionList.innerHTML, /☀/);
+
+  app.toggleTheme();
+
+  assert.equal(app.getState().theme, 'light');
+  assert.equal(fakeDocument.appLayout.dataset.theme, 'light');
+  assert.match(fakeDocument.sessionList.innerHTML, /aria-label="切换到暗色主题"/);
+  assert.match(fakeDocument.sessionList.innerHTML, /☾/);
+  assert.equal(
+    fakeStorage.getItem('codex.webAgentConsole.preferences.v1'),
+    JSON.stringify({
+      projectPanelCollapsed: false,
+      activityPanelCollapsed: true,
+      theme: 'light',
     }),
   );
 });
@@ -5206,6 +5279,7 @@ test('browser app uses a full-screen mobile drawer for sessions and activity on 
   assert.match(fakeDocument.mobileDrawer.innerHTML, /data-mobile-drawer-close="true"/);
   assert.match(fakeDocument.mobileDrawer.innerHTML, /class="mobile-project-sidebar"/);
   assert.match(fakeDocument.mobileDrawer.innerHTML, /退出登录/);
+  assert.match(fakeDocument.mobileDrawer.innerHTML, /data-theme-toggle="true"/);
   assert.match(fakeDocument.mobileDrawer.innerHTML, /Focus thread/);
 
   app.toggleActivityPanel();
@@ -5322,6 +5396,12 @@ test('shell html removes the generic conversation title and renames panel contro
   assert.match(html, /class="panel-toggle-mobile-glyph" aria-hidden="true">/);
   assert.match(html, /class="panel-toggle-mobile-bar"/);
   assert.match(html, /id="conversation-status"/);
+  assert.match(html, /class="conversation-status conversation-status--connected"/);
+  assert.match(html, /class="conversation-status-label">在线<\/span>/);
+  assert.match(
+    html,
+    /<div class="conversation-header-title">\s*<div id="conversation-title" class="conversation-title" hidden><\/div>\s*<\/div>\s*<div id="conversation-status" class="conversation-status conversation-status--connected" role="status" aria-live="polite">[\s\S]*?<\/div>\s*<button[\s\S]*?id="activity-panel-toggle"/,
+  );
   assert.match(html, /class="session-dock"/);
   assert.match(html, /id="session-dock-plan-summary"/);
   assert.match(html, /class="composer-action-row"/);
@@ -5373,6 +5453,9 @@ test('sidebar and mobile drawer render a fixed logout action in the sessions pan
 
   assert.match(sidebarHtml, /退出登录/);
   assert.match(sidebarHtml, /data-logout-button="true"/);
+  assert.match(sidebarHtml, /data-theme-toggle="true"/);
+  assert.match(sidebarHtml, /sidebar-footer-actions/);
+  assert.match(sidebarHtml, /aria-label="切换到暗色主题"/);
   assert.match(sidebarHtml, /sidebar-footer/);
   assert.match(activityDrawerHtml, /history-dialog/);
 });
@@ -5552,6 +5635,8 @@ test('browser app shows backend status when session loading fails', async () => 
 
   assert.equal(app.getState().loadError, 'WebSocket is not open: readyState 3 (CLOSED)');
   assert.equal(app.getState().systemStatus.backend.status, 'reconnecting');
+  assert.equal(fakeDocument.conversationStatus.dataset.statusTone, 'reconnecting');
+  assert.equal(fakeDocument.conversationStatus.textContent, '重连');
   assert.match(fakeDocument.sessionList.innerHTML, /后端重连中/);
   assert.match(fakeDocument.sessionList.innerHTML, /WebSocket is not open/);
 });
@@ -5564,6 +5649,28 @@ test('conversation css clamps horizontal overflow in the main thread viewport', 
   assert.doesNotMatch(css, /\.message-markdown pre\s*\{[^}]*overflow-x:\s*auto;/s);
   assert.doesNotMatch(css, /\.message-markdown table\s*\{[^}]*overflow-x:\s*auto;/s);
   assert.doesNotMatch(css, /\.diff-view\s*\{[^}]*overflow:\s*auto;/s);
+});
+
+test('conversation status css renders a glowing header light with compact text in the top-right corner', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /\.conversation-header\s*\{[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\) auto auto;[^}]*grid-template-areas:\s*"project title status activity";/s,
+  );
+  assert.match(css, /\.conversation-status\s*\{[^}]*grid-area:\s*status;[^}]*justify-self:\s*end;/s);
+  assert.match(
+    css,
+    /\.conversation-status-light\s*\{[^}]*width:\s*(12|13|14)px;[^}]*height:\s*(12|13|14)px;[^}]*box-shadow:\s*0 0 0 [^;]+,\s*0 0 [^;]+;/s,
+  );
+  assert.match(
+    css,
+    /\.conversation-status--connected\s+\.conversation-status-light\s*\{[^}]*background:\s*#2b7d48;[^}]*box-shadow:\s*0 0 0 [^;]+,\s*0 0 [^;]+;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.conversation-header\s*\{[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\);[^}]*grid-template-areas:\s*"project status"\s*"title title";/s,
+  );
 });
 
 test('auth css uses a fullscreen high-blur overlay while the login gate is visible', () => {
@@ -5730,7 +5837,33 @@ test('sidebar css keeps session rows compact and close buttons centered', () => 
     /\.history-dialog-close\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;[^}]*padding:\s*0;/s,
   );
   assert.match(css, /\.sidebar-footer\s*\{[^}]*position:\s*sticky;[^}]*bottom:\s*0;/s);
-  assert.match(css, /\.sidebar-logout-button\s*\{[^}]*width:\s*100%;/s);
+  assert.match(css, /\.sidebar-footer-actions\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;[^}]*gap:\s*(8|9|10)px;/s);
+  assert.match(css, /\.sidebar-logout-button\s*\{[^}]*flex:\s*1\s+1\s+auto;/s);
+  assert.match(
+    css,
+    /\.sidebar-theme-toggle\s*\{[^}]*width:\s*(42|44)px;[^}]*min-width:\s*(42|44)px;[^}]*min-height:\s*(42|44)px;[^}]*border:\s*0;[^}]*background:\s*transparent;/s,
+  );
+});
+
+test('theme css adds a dark palette and transparent icon toggle affordance', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /body\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark;[^}]*background:[^}]*linear-gradient/s,
+  );
+  assert.match(
+    css,
+    /\.layout\[data-theme="dark"\]\s+\.panel\s*\{[^}]*background:\s*rgba\([^)]*\);[^}]*box-shadow:\s*0 18px 60px rgba\(/s,
+  );
+  assert.match(
+    css,
+    /\.sidebar-theme-toggle:hover\s*\{[^}]*background:\s*rgba\([^)]*\);/s,
+  );
+  assert.match(
+    css,
+    /\.sidebar-theme-toggle:focus-visible\s*\{[^}]*outline:\s*2px solid rgba\(/s,
+  );
 });
 
 test('sidebar and conversation css keep emphasis lightweight', () => {
