@@ -12,6 +12,7 @@ import {
   openDialog,
   setupPanelResizer,
 } from './dom-utils.js';
+import { normalizePositiveInteger } from './file-preview-utils.js';
 import {
   findProject,
   getPendingSessionProject,
@@ -47,6 +48,7 @@ import {
 } from './render-shell.js';
 import { renderApprovalModeControls } from './render-settings.js';
 import { renderHistoryDialogContent } from './render-projects.js';
+import { renderFilePreviewDialog } from './render-file-preview.js';
 import { renderConversationNavigation } from './render-turn-items.js';
 
 export function bindProjectSidebarActions(ctx, root) {
@@ -212,6 +214,7 @@ export function renderApp(ctx) {
     const activityPanel = ctx.documentRef.querySelector('#activity-panel');
     const mobileDrawer = ctx.documentRef.querySelector('#mobile-drawer');
     const historyDialog = ctx.documentRef.querySelector('#history-dialog');
+    const filePreviewDialog = ctx.documentRef.querySelector('#file-preview-dialog');
     const renameDialog = ctx.documentRef.querySelector('#rename-dialog');
     const projectPanelToggle = ctx.documentRef.querySelector('#project-panel-toggle');
     const activityPanelToggle = ctx.documentRef.querySelector('#activity-panel-toggle');
@@ -574,10 +577,31 @@ export function renderApp(ctx) {
           historyDialog.close();
         } else {
           historyDialog.open = false;
+      }
+    }
+
+    if (filePreviewDialog) {
+      filePreviewDialog.innerHTML = ctx.filePreviewState
+        ? renderFilePreviewDialog(ctx.filePreviewState)
+        : '';
+
+      if (ctx.filePreviewState) {
+        openDialog(filePreviewDialog);
+
+        for (const button of filePreviewDialog.querySelectorAll('[data-file-preview-close]')) {
+          button.addEventListener('click', () => {
+            ctx.controller.closeFilePreview();
+          });
         }
+
+        const highlightedLine = filePreviewDialog.querySelector?.('[data-file-preview-highlight="true"]');
+        highlightedLine?.scrollIntoView?.({ block: 'center' });
+      } else if (filePreviewDialog.open) {
+        closeDialog(filePreviewDialog);
       }
     }
   }
+}
 
 export function bindControllerDocumentEvents(ctx) {
   if (ctx.documentRef) {
@@ -593,7 +617,9 @@ export function bindControllerDocumentEvents(ctx) {
     const composerFileInput = ctx.documentRef.querySelector('#composer-file-input');
     const composerImageInput = ctx.documentRef.querySelector('#composer-image-input');
     const interruptButton = ctx.documentRef.querySelector('#interrupt-button');
+    const conversationBody = ctx.documentRef.querySelector('#conversation-body');
     const historyDialog = ctx.documentRef.querySelector('#history-dialog');
+    const filePreviewDialog = ctx.documentRef.querySelector('#file-preview-dialog');
     const mobileDrawer = ctx.documentRef.querySelector('#mobile-drawer');
     const projectDialog = ctx.documentRef.querySelector('#project-dialog');
     const projectDialogForm = ctx.documentRef.querySelector('#project-dialog-form');
@@ -664,6 +690,29 @@ export function bindControllerDocumentEvents(ctx) {
     interruptButton?.addEventListener('click', () => {
       void ctx.controller.interruptTurn();
     });
+
+    conversationBody?.addEventListener('click', (event) => {
+      const localFileLink = event?.target?.closest?.('[data-local-file-path]');
+      if (localFileLink) {
+        event.preventDefault?.();
+        void ctx.controller.openLocalFilePreview(
+          localFileLink.dataset.localFilePath,
+          normalizePositiveInteger(localFileLink.dataset.localFileLine),
+          normalizePositiveInteger(localFileLink.dataset.localFileColumn),
+        );
+        return;
+      }
+
+      const attachmentButton = event?.target?.closest?.('[data-message-attachment-item]');
+      if (attachmentButton) {
+        event.preventDefault?.();
+        ctx.controller.openConversationAttachment(
+          attachmentButton.dataset.messageAttachmentItem,
+          Number(attachmentButton.dataset.messageAttachmentIndex),
+        );
+      }
+    });
+
     projectPanelToggle?.addEventListener('click', () => {
       ctx.controller.toggleProjectPanel();
     });
@@ -695,6 +744,13 @@ export function bindControllerDocumentEvents(ctx) {
         ctx.controller.closeHistoryDialog();
       }
     });
+
+    filePreviewDialog?.addEventListener?.('close', () => {
+      if (ctx.filePreviewState) {
+        ctx.controller.closeFilePreview();
+      }
+    });
+
     renameDialog?.addEventListener?.('close', () => {
       if (ctx.pendingRenameSessionId) {
         ctx.controller.closeRenameDialog();

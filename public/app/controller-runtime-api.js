@@ -6,6 +6,7 @@ import {
   scrollConversationToBottom,
   scrollConversationToTop,
 } from './dom-utils.js';
+import { findProject } from './project-utils.js';
 import {
   canEditSessionSettings,
   getSelectedSessionSettings,
@@ -35,6 +36,16 @@ export function createRuntimeControllerApi(ctx) {
     },
     async closeProject(projectId) {
       if (!projectId) {
+        return null;
+      }
+
+      const project = findProject(ctx.state.projects ?? [], projectId);
+      const projectLabel = project?.displayName ?? project?.cwd ?? projectId;
+      const view = ctx.documentRef?.defaultView ?? globalThis;
+      if (
+        typeof view?.confirm === 'function' &&
+        !view.confirm(`确认删除项目“${projectLabel}”？`)
+      ) {
         return null;
       }
 

@@ -91,7 +91,7 @@ export function renderUserMessageAttachmentCard(attachment) {
   const detail = attachment.mimeType ?? 'application/octet-stream';
 
   return [
-    '<div class="message-attachment-card" role="listitem">',
+    `<button class="message-attachment-card message-attachment-card--interactive" type="button" role="listitem" data-message-attachment-item="${escapeHtml(attachment.itemId ?? '')}" data-message-attachment-index="${escapeHtml(attachment.index ?? 0)}">`,
     attachment.kind === 'image' && attachment.url
       ? `<img class="message-attachment-thumb" alt="${escapeHtml(title)}" src="${escapeHtml(attachment.url)}" />`
       : `<div class="message-attachment-placeholder">${escapeHtml(inferAttachmentLabel(attachment))}</div>`,
@@ -102,7 +102,7 @@ export function renderUserMessageAttachmentCard(attachment) {
       ? `<div class="message-attachment-preview">${escapeHtml(attachment.previewText)}</div>`
       : '',
     '</div>',
-    '</div>',
+    '</button>',
   ].join('');
 }
 

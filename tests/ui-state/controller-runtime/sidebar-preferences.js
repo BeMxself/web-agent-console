@@ -15,6 +15,11 @@ import {
 test('browser app can close a project from the sidebar activity state', async () => {
   const requests = [];
   const fakeDocument = createFakeDocument();
+  const confirmMessages = [];
+  fakeDocument.defaultView.confirm = (message) => {
+    confirmMessages.push(message);
+    return true;
+  };
   let projectClosed = false;
   const app = createAppController({
     fetchImpl: async (url, options = {}) => {
@@ -89,6 +94,69 @@ test('browser app can close a project from the sidebar activity state', async ()
       method: 'DELETE',
     },
   ]);
+  assert.deepEqual(confirmMessages, ['确认删除项目“workspace-b”？']);
+});
+
+test('browser app keeps a project when project deletion confirmation is canceled', async () => {
+  const requests = [];
+  const fakeDocument = createFakeDocument();
+  const confirmMessages = [];
+  fakeDocument.defaultView.confirm = (message) => {
+    confirmMessages.push(message);
+    return false;
+  };
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+            {
+              id: '/tmp/workspace-b',
+              cwd: '/tmp/workspace-b',
+              displayName: 'workspace-b',
+              collapsed: false,
+              focusedSessions: [],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/projects/%2Ftmp%2Fworkspace-b' && options.method === 'DELETE') {
+        requests.push({ url, method: options.method });
+        return jsonResponse({ ok: true });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+  });
+
+  await app.loadSessions();
+  await app.closeProject('/tmp/workspace-b');
+
+  assert.equal(app.getState().projects.length, 2);
+  assert.match(fakeDocument.sessionList.innerHTML, /workspace-b/);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(confirmMessages, ['确认删除项目“workspace-b”？']);
 });
 
 test('browser app can rename a selected session and sync the title plus project tree', async () => {
@@ -473,4 +541,3 @@ test('browser app auto-resizes the composer input from one line up to five lines
   assert.equal(fakeDocument.composerInput.style.height, '148px');
   assert.equal(fakeDocument.composerInput.style.overflowY, 'auto');
 });
-

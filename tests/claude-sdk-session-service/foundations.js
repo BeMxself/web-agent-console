@@ -434,8 +434,8 @@ test('readSession maps Claude transcript attachments into lightweight user attac
         text_elements: [],
       },
       {
-        type: 'attachmentSummary',
-        attachmentType: 'image',
+        type: 'image',
+        url: 'data:image/png;base64,Zm9v',
         mimeType: 'image/png',
         name: null,
       },
@@ -444,12 +444,14 @@ test('readSession maps Claude transcript attachments into lightweight user attac
         attachmentType: 'pdf',
         mimeType: 'application/pdf',
         name: 'report.pdf',
+        dataBase64: 'YmFy',
       },
       {
         type: 'attachmentSummary',
         attachmentType: 'text',
         mimeType: 'text/plain',
         name: 'notes.txt',
+        textContent: 'hello',
       },
     ]);
   } finally {
@@ -625,4 +627,3 @@ test('startTurn rejects when resumed-session turn setup throws before Claude que
     await rm(tempDir, { recursive: true, force: true });
   }
 });
-

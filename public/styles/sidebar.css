@@ -441,15 +441,6 @@
   border: 1px solid rgba(17, 32, 49, 0.06);
 }
 
-.history-section-title {
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #5c7289;
-}
-
 .history-section .session-item + .session-item {
   margin-top: 8px;
 }
@@ -457,6 +448,7 @@
 .history-dialog-frame {
   width: min(720px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 48px));
+  overflow: hidden;
   padding: 0;
   border: 0;
   border-radius: 24px;
@@ -578,7 +570,8 @@
 
 .mobile-project-sidebar .sidebar-footer {
   margin-top: auto;
-  position: static;
+  position: sticky;
+  bottom: 0;
 }
 
 .mobile-drawer-body .panel,
@@ -607,8 +600,12 @@
 
 .history-dialog-shell {
   display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 16px;
-  max-height: min(720px, calc(100vh - 48px));
+  min-height: 0;
+  height: min(720px, calc(100vh - 48px));
+  max-height: 100%;
+  overflow: hidden;
   padding: 22px;
 }
 
@@ -698,4 +695,3 @@
   display: flex;
   gap: 10px;
 }
-

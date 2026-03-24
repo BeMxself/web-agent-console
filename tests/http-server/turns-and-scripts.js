@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -168,10 +170,13 @@ test('http server serves static assets with browser-safe content types and missi
   const address = server.address();
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
+  const indexResponse = await fetch(`${baseUrl}/`);
   const jsResponse = await fetch(`${baseUrl}/app.js`);
   const cssResponse = await fetch(`${baseUrl}/app.css`);
   const faviconResponse = await fetch(`${baseUrl}/favicon.ico`);
 
+  assert.equal(indexResponse.status, 200);
+  assert.match(await indexResponse.text(), /<title>Web Agent Console<\/title>/);
   assert.equal(jsResponse.status, 200);
   assert.match(jsResponse.headers.get('content-type') ?? '', /javascript/);
   assert.equal(cssResponse.status, 200);
@@ -179,6 +184,90 @@ test('http server serves static assets with browser-safe content types and missi
   assert.equal(faviconResponse.status, 404);
 
   await new Promise((resolve) => server.close(resolve));
+});
+
+test('http server previews local files for code and images and streams downloads for binary files', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'web-agent-console-local-files-'));
+  const codePath = join(tempDir, 'sample.js');
+  const imagePath = join(tempDir, 'sample.png');
+  const pdfPath = join(tempDir, 'sample.pdf');
+  await writeFile(codePath, 'const value = 1;\nconsole.log(value);\n', 'utf8');
+  await writeFile(imagePath, Buffer.from('fake-image'));
+  await writeFile(pdfPath, Buffer.from('%PDF-1.7'));
+
+  const sessionService = toHttpProvider({
+    subscribe() {
+      return () => {};
+    },
+    getStatus() {
+      return {
+        overall: 'connected',
+        backend: { status: 'connected' },
+        relay: { status: 'online' },
+        lastError: null,
+      };
+    },
+  });
+  const server = createHttpServer({ provider: sessionService, publicDir: join(pocDir, 'public') });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    const codePreviewResponse = await fetch(
+      `${baseUrl}/api/local-files/preview?path=${encodeURIComponent(codePath)}`,
+    );
+    assert.equal(codePreviewResponse.status, 200);
+    assert.deepEqual(await codePreviewResponse.json(), {
+      kind: 'text',
+      name: 'sample.js',
+      path: codePath,
+      mimeType: 'text/javascript',
+      content: 'const value = 1;\nconsole.log(value);\n',
+      lineCount: 2,
+      downloadUrl: `/api/local-files/content?path=${encodeURIComponent(codePath)}&download=1`,
+    });
+
+    const imagePreviewResponse = await fetch(
+      `${baseUrl}/api/local-files/preview?path=${encodeURIComponent(imagePath)}`,
+    );
+    assert.equal(imagePreviewResponse.status, 200);
+    assert.deepEqual(await imagePreviewResponse.json(), {
+      kind: 'image',
+      name: 'sample.png',
+      path: imagePath,
+      mimeType: 'image/png',
+      contentUrl: `/api/local-files/content?path=${encodeURIComponent(imagePath)}`,
+      downloadUrl: `/api/local-files/content?path=${encodeURIComponent(imagePath)}&download=1`,
+    });
+
+    const pdfPreviewResponse = await fetch(
+      `${baseUrl}/api/local-files/preview?path=${encodeURIComponent(pdfPath)}`,
+    );
+    assert.equal(pdfPreviewResponse.status, 200);
+    assert.deepEqual(await pdfPreviewResponse.json(), {
+      kind: 'download',
+      name: 'sample.pdf',
+      path: pdfPath,
+      mimeType: 'application/pdf',
+      downloadUrl: `/api/local-files/content?path=${encodeURIComponent(pdfPath)}&download=1`,
+    });
+
+    const pdfDownloadResponse = await fetch(
+      `${baseUrl}/api/local-files/content?path=${encodeURIComponent(pdfPath)}&download=1`,
+    );
+    assert.equal(pdfDownloadResponse.status, 200);
+    assert.match(pdfDownloadResponse.headers.get('content-type') ?? '', /application\/pdf/);
+    assert.match(
+      pdfDownloadResponse.headers.get('content-disposition') ?? '',
+      /attachment;\s*filename="sample\.pdf"/,
+    );
+    assert.deepEqual(Buffer.from(await pdfDownloadResponse.arrayBuffer()), Buffer.from('%PDF-1.7'));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('smoke script documents required codex prerequisites and README points to the PoC', () => {

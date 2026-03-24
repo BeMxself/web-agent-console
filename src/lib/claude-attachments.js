@@ -59,9 +59,13 @@ export function createAttachmentSummaryFromClaudeContentBlock(block) {
 
   if (block.type === 'image') {
     const mimeType = normalizeMimeType(block?.source?.media_type);
+    const sourceData = normalizeNonEmptyString(block?.source?.data);
     return {
-      type: 'attachmentSummary',
-      attachmentType: 'image',
+      type: 'image',
+      url:
+        block?.source?.type === 'base64' && sourceData
+          ? `data:${mimeType || 'image/*'};base64,${sourceData}`
+          : null,
       mimeType: mimeType || 'image/*',
       name: null,
     };
@@ -73,13 +77,19 @@ export function createAttachmentSummaryFromClaudeContentBlock(block) {
 
   const mimeType = normalizeMimeType(block?.source?.media_type);
   const attachmentType = classifyDocumentAttachmentType(mimeType);
+  const dataBase64 =
+    block?.source?.type === 'base64' ? normalizeNonEmptyString(block?.source?.data) : null;
+  const textContent =
+    block?.source?.type === 'text' ? normalizeContentString(block?.source?.data) : null;
 
-  return {
+  return omitNilValues({
     type: 'attachmentSummary',
     attachmentType,
     mimeType: mimeType || 'application/octet-stream',
     name: normalizeName(block?.title),
-  };
+    dataBase64,
+    textContent,
+  });
 }
 
 function mapClaudeAttachmentsToPromptBlocks(attachments = []) {
@@ -134,6 +144,16 @@ function normalizeName(name) {
   return normalized || null;
 }
 
+function normalizeNonEmptyString(value) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
+}
+
+function normalizeContentString(value) {
+  const normalized = String(value ?? '');
+  return normalized ? normalized : null;
+}
+
 function classifyDocumentAttachmentType(mimeType) {
   if (mimeType === 'application/pdf') {
     return 'pdf';
@@ -150,4 +170,8 @@ function createAttachmentError(message) {
   const error = new Error(message);
   error.statusCode = 400;
   return error;
+}
+
+function omitNilValues(object) {
+  return Object.fromEntries(Object.entries(object).filter(([, value]) => value != null));
 }

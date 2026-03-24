@@ -2,6 +2,11 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { createAuth } from './auth.js';
+import {
+  createContentDisposition,
+  readLocalFileContent,
+  readLocalFilePreview,
+} from './local-file-preview.js';
 import { normalizeTurnRequest } from './turn-request.js';
 
 export function createHttpServer({ provider, publicDir, config = {} }) {
@@ -164,6 +169,26 @@ export function createHttpServer({ provider, publicDir, config = {} }) {
         const sessionId = decodeURIComponent(pathname.split('/')[3]);
         const data = await provider.getSessionSettings(sessionId);
         writeJson(res, 200, data);
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/local-files/preview') {
+        const data = await readLocalFilePreview(requestUrl.searchParams.get('path'));
+        writeJson(res, 200, data);
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/local-files/content') {
+        const file = await readLocalFileContent(requestUrl.searchParams.get('path'));
+        const headers = {
+          'content-type': getContentTypeByMimeType(file.mimeType),
+        };
+        if (requestUrl.searchParams.get('download') === '1') {
+          headers['content-disposition'] = createContentDisposition(file.name);
+        }
+
+        res.writeHead(200, headers);
+        res.end(file.content);
         return;
       }
 
@@ -402,6 +427,45 @@ function createHttpError(statusCode, message) {
 }
 
 function getContentType(filePath) {
+  return getContentTypeByMimeType(null, filePath);
+}
+
+function getContentTypeByMimeType(mimeType, filePath = null) {
+  if (mimeType) {
+    switch (mimeType) {
+      case 'application/json':
+        return 'application/json; charset=utf-8';
+      case 'application/pdf':
+        return 'application/pdf';
+      case 'application/xml':
+        return 'application/xml; charset=utf-8';
+      case 'application/yaml':
+        return 'application/yaml; charset=utf-8';
+      case 'image/apng':
+      case 'image/avif':
+      case 'image/bmp':
+      case 'image/gif':
+      case 'image/jpeg':
+      case 'image/png':
+      case 'image/svg+xml':
+      case 'image/webp':
+        return mimeType;
+      case 'text/css':
+      case 'text/html':
+      case 'text/javascript':
+      case 'text/markdown':
+      case 'text/plain':
+      case 'text/typescript':
+        return `${mimeType}; charset=utf-8`;
+      default:
+        break;
+    }
+  }
+
+  if (!filePath) {
+    return 'application/octet-stream';
+  }
+
   switch (extname(filePath)) {
     case '.html':
       return 'text/html; charset=utf-8';

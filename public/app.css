@@ -1,6 +1,7 @@
 @import './styles/base.css';
 @import './styles/sidebar.css';
 @import './styles/thread.css';
+@import './styles/file-preview.css';
 @import './styles/activity.css';
 @import './styles/composer.css';
 @import './styles/theme.css';

@@ -148,6 +148,7 @@ test('render helpers show focused session titles by default and reveal history i
   assert.match(dialogHtml, /添加历史会话/);
   assert.match(dialogHtml, /未归档/);
   assert.match(dialogHtml, /已归档/);
+  assert.doesNotMatch(dialogHtml, /history-section-title/);
   assert.doesNotMatch(dialogHtml, /记住侧栏开关状态/);
   assert.doesNotMatch(dialogHtml, /data-panel-preference-toggle/);
   assert.match(dialogHtml, /Working thread/);
@@ -155,6 +156,7 @@ test('render helpers show focused session titles by default and reveal history i
   assert.doesNotMatch(dialogHtml, /Archived task/);
   assert.match(archivedDialogHtml, /Archived task/);
   assert.doesNotMatch(archivedDialogHtml, /Working thread/);
+  assert.doesNotMatch(archivedDialogHtml, /history-section-title/);
   assert.match(emptyDetailHtml, /会话详情/);
   assert.match(detailHtml, /重命名/);
   assert.doesNotMatch(detailHtml, /上一回合/);
@@ -692,6 +694,10 @@ test('render helpers render full markdown in message bubbles and keep raw html e
               '',
               '[Example](https://example.com)',
               '',
+              '[Local file](/tmp/workspace-a/src/app.js#L12)',
+              '',
+              '[File URI](file:///tmp/workspace-a/notes.md:8)',
+              '',
               '<script>alert("xss")</script>',
             ].join('\n'),
           },
@@ -711,8 +717,66 @@ test('render helpers render full markdown in message bubbles and keep raw html e
   assert.match(detailHtml, /<a[^>]+href="https:\/\/example\.com"/);
   assert.match(detailHtml, /<a[^>]+target="_blank"/);
   assert.match(detailHtml, /<a[^>]+rel="noreferrer noopener"/);
+  assert.match(detailHtml, /<a[^>]+href="\/tmp\/workspace-a\/src\/app\.js#L12"/);
+  assert.match(
+    detailHtml,
+    /<a[^>]+data-local-file-path="\/tmp\/workspace-a\/src\/app\.js"[^>]+data-local-file-line="12"/,
+  );
+  assert.match(detailHtml, /<a[^>]+href="file:\/\/\/tmp\/workspace-a\/notes\.md:8"/);
+  assert.match(
+    detailHtml,
+    /<a[^>]+data-local-file-path="\/tmp\/workspace-a\/notes\.md"[^>]+data-local-file-line="8"/,
+  );
   assert.match(detailHtml, /&lt;script&gt;alert\(&quot;xss&quot;\)&lt;\/script&gt;/);
   assert.doesNotMatch(detailHtml, /<script>alert\("xss"\)<\/script>/);
+});
+
+test('render helpers number user attachment actions by attachment order instead of raw content index', () => {
+  const detailHtml = renderThreadDetail(
+    {
+      id: 'thread-attachment-order',
+      name: 'Attachment order',
+      cwd: '/tmp/workspace-a',
+      turns: [
+        {
+          id: 'turn-1',
+          status: 'completed',
+          items: [
+            {
+              type: 'userMessage',
+              id: 'user-1',
+              content: [
+                { type: 'text', text: 'Please inspect these files', text_elements: [] },
+                {
+                  type: 'image',
+                  name: 'diagram.png',
+                  mimeType: 'image/png',
+                  url: 'data:image/png;base64,Zm9v',
+                },
+                {
+                  type: 'attachmentSummary',
+                  attachmentType: 'pdf',
+                  name: 'report.pdf',
+                  mimeType: 'application/pdf',
+                  dataBase64: 'YmFy',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    null,
+    {
+      overall: 'connected',
+      backend: { status: 'connected' },
+      relay: { status: 'online' },
+      lastError: null,
+    },
+  );
+
+  assert.match(detailHtml, /data-message-attachment-item="user-1"[^>]+data-message-attachment-index="0"[\s\S]*diagram\.png/);
+  assert.match(detailHtml, /data-message-attachment-item="user-1"[^>]+data-message-attachment-index="1"[\s\S]*report\.pdf/);
 });
 
 test('render helpers show a disconnected status light and error message when the backend is unavailable', () => {

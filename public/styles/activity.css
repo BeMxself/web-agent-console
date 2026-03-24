@@ -288,9 +288,9 @@
 #composer {
   display: grid;
   gap: 8px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(17, 32, 49, 0.08);
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 #composer-input {
@@ -605,9 +605,9 @@
 
 .session-dock {
   display: grid;
-  gap: 12px;
-  margin-top: 16px;
-  padding-top: 16px;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid rgba(17, 32, 49, 0.08);
 }
 
@@ -796,4 +796,3 @@
   gap: 8px;
   min-width: 0;
 }
-

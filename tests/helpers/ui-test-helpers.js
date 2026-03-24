@@ -130,6 +130,21 @@ export function createFakeDocument(options = {}) {
       this.open = false;
     },
   });
+  const filePreviewDialog = createFakeElement({
+    open: false,
+    showModal() {
+      this.open = true;
+    },
+    close() {
+      this.open = false;
+    },
+  });
+  let lastDownload = null;
+  const body = {
+    dataset: {},
+    appendChild() {},
+    removeChild() {},
+  };
 
   const elements = new Map([
     ['#app-layout', appLayout],
@@ -169,6 +184,7 @@ export function createFakeDocument(options = {}) {
     ['#conversation-scroll', conversationScroll],
     ['#mobile-drawer', mobileDrawer],
     ['#history-dialog', historyDialog],
+    ['#file-preview-dialog', filePreviewDialog],
   ]);
 
   wireConversationMetrics(conversationBody, conversationScroll);
@@ -226,11 +242,36 @@ export function createFakeDocument(options = {}) {
     conversationScroll,
     mobileDrawer,
     historyDialog,
-    body: { dataset: {} },
+    filePreviewDialog,
+    body,
     documentElement: { dataset: {} },
     defaultView: createFakeWindow({ mobile }),
+    createElement(tagName) {
+      if (String(tagName).toLowerCase() === 'a') {
+        return {
+          href: '',
+          download: '',
+          target: '',
+          rel: '',
+          style: {},
+          click() {
+            lastDownload = {
+              href: this.href,
+              download: this.download,
+              target: this.target,
+              rel: this.rel,
+            };
+          },
+        };
+      }
+
+      return createFakeElement();
+    },
     querySelector(selector) {
       return elements.get(selector) ?? null;
+    },
+    get lastDownload() {
+      return lastDownload;
     },
   };
 }

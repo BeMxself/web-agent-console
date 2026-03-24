@@ -346,3 +346,208 @@ test('browser app keeps attachments through pending first-send session creation 
   assert.equal(app.getState().composerDraft, '');
 });
 
+test('browser app opens local code links in a readonly preview dialog with line numbers', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'File links thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'File links thread',
+            cwd: '/tmp/workspace-a',
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'agentMessage',
+                    id: 'agent-1',
+                    phase: 'final_answer',
+                    text: '[Open app.js](/tmp/workspace-a/src/app.js#L2)',
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/preview?path=%2Ftmp%2Fworkspace-a%2Fsrc%2Fapp.js') {
+        return jsonResponse({
+          kind: 'text',
+          name: 'app.js',
+          path: '/tmp/workspace-a/src/app.js',
+          mimeType: 'text/javascript',
+          content: 'export const one = 1;\nconsole.log(one);\n',
+          lineCount: 2,
+          downloadUrl:
+            '/api/local-files/content?path=%2Ftmp%2Fworkspace-a%2Fsrc%2Fapp.js&download=1',
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: {
+      closest(selector) {
+        if (selector === '[data-local-file-path]') {
+          return {
+            dataset: {
+              localFilePath: '/tmp/workspace-a/src/app.js',
+              localFileLine: '2',
+              localFileColumn: '',
+            },
+          };
+        }
+        return null;
+      },
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(fakeDocument.filePreviewDialog.open, true);
+  assert.match(fakeDocument.filePreviewDialog.innerHTML, /app\.js/);
+  assert.match(fakeDocument.filePreviewDialog.innerHTML, /data-file-preview-line-number="1"/);
+  assert.match(fakeDocument.filePreviewDialog.innerHTML, /data-file-preview-line-number="2"/);
+  assert.match(fakeDocument.filePreviewDialog.innerHTML, /file-preview-line--highlight/);
+});
+
+test('browser app previews uploaded image attachments and downloads uploaded binary attachments from the conversation', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Attachments thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Attachments thread',
+            cwd: '/tmp/workspace-a',
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'userMessage',
+                    id: 'user-1',
+                    content: [
+                      { type: 'text', text: 'See attachments', text_elements: [] },
+                      {
+                        type: 'image',
+                        name: 'diagram.png',
+                        mimeType: 'image/png',
+                        url: 'data:image/png;base64,Zm9v',
+                      },
+                      {
+                        type: 'attachmentSummary',
+                        attachmentType: 'pdf',
+                        name: 'report.pdf',
+                        mimeType: 'application/pdf',
+                        dataBase64: 'YmFy',
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: {
+      closest(selector) {
+        if (selector === '[data-message-attachment-item]') {
+          return {
+            dataset: {
+              messageAttachmentItem: 'user-1',
+              messageAttachmentIndex: '0',
+            },
+          };
+        }
+        return null;
+      },
+    },
+  });
+
+  assert.equal(fakeDocument.filePreviewDialog.open, true);
+  assert.match(fakeDocument.filePreviewDialog.innerHTML, /diagram\.png/);
+  assert.match(fakeDocument.filePreviewDialog.innerHTML, /data:image\/png;base64,Zm9v/);
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: {
+      closest(selector) {
+        if (selector === '[data-message-attachment-item]') {
+          return {
+            dataset: {
+              messageAttachmentItem: 'user-1',
+              messageAttachmentIndex: '1',
+            },
+          };
+        }
+        return null;
+      },
+    },
+  });
+
+  assert.deepEqual(fakeDocument.lastDownload, {
+    href: 'data:application/pdf;base64,YmFy',
+    download: 'report.pdf',
+    target: '',
+    rel: '',
+  });
+});

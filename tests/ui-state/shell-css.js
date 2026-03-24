@@ -157,7 +157,7 @@ test('mobile layout css keeps the conversation pinned to the viewport with a fix
   );
   assert.match(
     css,
-    /@media \(max-width: 760px\)\s*\{[\s\S]*#composer\s*\{[^}]*position:\s*sticky;[^}]*bottom:\s*0;[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(248,\s*250,\s*252,\s*0\.72\),\s*rgba\(244,\s*247,\s*250,\s*0\.88\)\);/s,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*#composer\s*\{[^}]*position:\s*sticky;[^}]*bottom:\s*0;[^}]*margin-top:\s*0;[^}]*padding-top:\s*0;[^}]*border-top:\s*0;[^}]*background:\s*linear-gradient\(180deg,\s*rgba\(248,\s*250,\s*252,\s*0\.72\),\s*rgba\(244,\s*247,\s*250,\s*0\.88\)\);/s,
   );
   assert.match(
     css,
@@ -193,9 +193,22 @@ test('mobile layout css keeps the conversation pinned to the viewport with a fix
   );
   assert.match(
     css,
-    /\.mobile-project-sidebar\s+\.sidebar-footer\s*\{[^}]*margin-top:\s*auto;[^}]*position:\s*static;/s,
+    /\.mobile-project-sidebar\s+\.sidebar-footer\s*\{[^}]*margin-top:\s*auto;[^}]*position:\s*sticky;[^}]*bottom:\s*0;/s,
   );
   assert.match(css, /\.mobile-drawer-close\s*\{[^}]*border-radius:\s*999px;/s);
+});
+
+test('session dock css keeps the composer stack visually compact without double top spacing', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /\.session-dock\s*\{[^}]*gap:\s*(8|9|10|11|12)px;[^}]*margin-top:\s*(6|7|8|9|10)px;[^}]*padding-top:\s*(6|7|8|9|10)px;[^}]*border-top:\s*1px solid rgba\(17, 32, 49, 0\.08\);/s,
+  );
+  assert.match(
+    css,
+    /#composer\s*\{[^}]*display:\s*grid;[^}]*gap:\s*8px;[^}]*margin-top:\s*0;[^}]*padding-top:\s*0;[^}]*border-top:\s*0;/s,
+  );
 });
 
 test('mobile composer css collapses settings into a summary strip and keeps the action row compact', () => {
@@ -307,12 +320,33 @@ test('sidebar css keeps session rows compact and close buttons centered', () => 
   assert.match(css, /\.history-item-title-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
 });
 
+test('history dialog css keeps scrolling inside the history list instead of the outer dialog shell', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /\.history-dialog-frame\s*\{[^}]*max-height:\s*min\(720px,\s*calc\(100vh - 48px\)\);[^}]*overflow:\s*hidden;/s,
+  );
+  assert.match(
+    css,
+    /\.history-dialog-shell\s*\{[^}]*grid-template-rows:\s*auto\s+auto\s+minmax\(0,\s*1fr\);[^}]*height:\s*min\(720px,\s*calc\(100vh - 48px\)\);[^}]*max-height:\s*100%;[^}]*overflow:\s*hidden;/s,
+  );
+  assert.match(
+    css,
+    /\.history-dialog-shell\s+\.history-picker\s*\{[^}]*max-height:\s*none;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s,
+  );
+});
+
 test('theme css adds a dark palette and transparent icon toggle affordance', () => {
   const css = readPublicFile('app.css');
 
   assert.match(
     css,
     /body\[data-theme="dark"\]\s*\{[^}]*color-scheme:\s*dark;[^}]*background:[^}]*linear-gradient/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*body\[data-theme="dark"\]\s*\{[^}]*background:[^}]*#0c141d[^}]*#162432/s,
   );
   assert.match(
     css,
@@ -340,6 +374,14 @@ test('theme css adds a dark palette and transparent icon toggle affordance', () 
   );
   assert.match(
     css,
+    /\.layout\[data-theme="dark"\]\s+\.sidebar-footer\s*\{[^}]*background:\s*transparent;[^}]*backdrop-filter:\s*none;/s,
+  );
+  assert.doesNotMatch(
+    css,
+    /\.layout\[data-theme="dark"\]\s+\.sidebar-footer\s*\{[^}]*linear-gradient/s,
+  );
+  assert.match(
+    css,
     /\.layout\[data-theme="dark"\]\s+\.project-action[\s\S]*background:\s*rgba\([^)]*\);[^}]*color:\s*#dce7f2;/s,
   );
   assert.match(
@@ -357,6 +399,14 @@ test('theme css adds a dark palette and transparent icon toggle affordance', () 
   assert.match(
     css,
     /body\[data-theme="dark"\]\s+\.mobile-drawer-shell\s*\{[^}]*background:\s*linear-gradient/s,
+  );
+  assert.match(
+    css,
+    /body\[data-theme="dark"\]\s+\.mobile-drawer-shell\s+\.sidebar-footer\s*\{[^}]*background:\s*transparent;[^}]*backdrop-filter:\s*none;/s,
+  );
+  assert.doesNotMatch(
+    css,
+    /body\[data-theme="dark"\]\s+\.mobile-drawer-shell\s+\.sidebar-footer\s*\{[^}]*linear-gradient/s,
   );
   assert.match(
     css,

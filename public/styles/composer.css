@@ -277,9 +277,24 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   align-items: center;
+  width: 100%;
   padding: 10px 12px;
+  border: 0;
   border-radius: 12px;
   background: rgba(17, 32, 49, 0.05);
+  text-align: left;
+}
+
+.message-attachment-card--interactive {
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.message-attachment-card--interactive:hover {
+  transform: translateY(-1px);
+  background: rgba(17, 32, 49, 0.08);
 }
 
 .diff-view {
@@ -512,9 +527,9 @@
     bottom: 0;
     z-index: 2;
     margin-top: 0;
-    padding-top: 8px;
+    padding-top: 0;
     padding-bottom: max(8px, env(safe-area-inset-bottom));
-    border-top-color: rgba(17, 32, 49, 0.05);
+    border-top: 0;
     background: linear-gradient(180deg, rgba(248, 250, 252, 0.72), rgba(244, 247, 250, 0.88));
     backdrop-filter: blur(16px);
   }
@@ -522,7 +537,7 @@
   .session-dock {
     gap: 8px;
     margin-top: 6px;
-    padding-top: 8px;
+    padding-top: 6px;
   }
 
   .task-summary-band {
@@ -594,4 +609,3 @@
     padding: 9px 10px;
     gap: 6px;
   }
-

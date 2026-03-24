@@ -155,13 +155,11 @@ export function renderHistoryDialogContent(project, activeTab = 'active') {
     activeTab === 'archived'
       ? renderHistorySection(
           project.id ?? project.cwd ?? '__unknown__',
-          '已归档',
           project.historySessions?.archived ?? [],
           'archived',
         )
       : renderHistorySection(
           project.id ?? project.cwd ?? '__unknown__',
-          '未归档',
           project.historySessions?.active ?? [],
           'active',
         ),
@@ -188,17 +186,12 @@ export function renderHistoryDialogTab(value, label, activeTab) {
   ].join('');
 }
 
-export function renderHistorySection(projectId, title, sessions, sectionKind) {
+export function renderHistorySection(projectId, sessions, sectionKind) {
   const items = sessions.length
     ? sessions.map((session) => renderHistoryItem(projectId, session, sectionKind)).join('')
     : '<div class="empty-list">暂时没有可导入的会话</div>';
 
-  return [
-    '<section class="history-section">',
-    `<div class="history-section-title">${escapeHtml(title)}</div>`,
-    items,
-    '</section>',
-  ].join('');
+  return ['<section class="history-section">', items, '</section>'].join('');
 }
 
 export function renderHistoryItem(projectId, session, sectionKind) {

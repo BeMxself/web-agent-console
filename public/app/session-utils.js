@@ -2,6 +2,10 @@ import {
   formatAttachmentSize,
   validateDraftAttachments,
 } from '../composer-attachments.js';
+import {
+  getDisplayName,
+  readAttachmentTextContent,
+} from './file-preview-utils.js';
 import { findThreadMeta } from './project-utils.js';
 import { normalizeRealtimeSessionState } from './thread-utils.js';
 import {
@@ -78,33 +82,59 @@ export function collectUserMessageAttachments(item) {
     return [];
   }
 
-  return item.content.flatMap((entry) => {
+  const attachments = [];
+
+  for (const entry of item.content) {
     if (entry?.type === 'image') {
-      return [
-        {
-          kind: 'image',
-          name: entry.name ?? '图片附件',
-          mimeType: entry.mimeType ?? 'image/*',
-          url: entry.url ?? null,
-          previewText: null,
-        },
-      ];
+      attachments.push({
+        itemId: item.id ?? null,
+        index: attachments.length,
+        kind: 'image',
+        name: entry.name ?? '图片附件',
+        mimeType: entry.mimeType ?? 'image/*',
+        url: entry.url ?? null,
+        previewText: null,
+        dataBase64: null,
+        textContent: null,
+      });
+      continue;
     }
 
     if (entry?.type === 'attachmentSummary') {
-      return [
-        {
-          kind: entry.attachmentType ?? 'file',
-          name: entry.name ?? inferAttachmentLabel(entry),
-          mimeType: entry.mimeType ?? 'application/octet-stream',
-          url: null,
-          previewText: entry.previewText ?? null,
-        },
-      ];
+      attachments.push({
+        itemId: item.id ?? null,
+        index: attachments.length,
+        kind: entry.attachmentType ?? 'file',
+        name: entry.name ?? getDisplayName(null, inferAttachmentLabel(entry)),
+        mimeType: entry.mimeType ?? 'application/octet-stream',
+        url: entry.url ?? null,
+        previewText: entry.previewText ?? null,
+        dataBase64: entry.dataBase64 ?? null,
+        textContent: readAttachmentTextContent(entry),
+      });
     }
+  }
 
-    return [];
-  });
+  return attachments;
+}
+
+export function findConversationAttachment(thread, itemId, attachmentIndex) {
+  const normalizedIndex = Number(attachmentIndex);
+  if (!thread || !itemId || !Number.isInteger(normalizedIndex) || normalizedIndex < 0) {
+    return null;
+  }
+
+  for (const turn of thread.turns ?? []) {
+    for (const item of turn.items ?? []) {
+      if (item?.id !== itemId) {
+        continue;
+      }
+
+      return collectUserMessageAttachments(item)[normalizedIndex] ?? null;
+    }
+  }
+
+  return null;
 }
 
 export function formatStatus(status) {
@@ -344,6 +374,10 @@ export function buildOptimisticUserContent(text, attachments = []) {
       mimeType: attachment.mimeType,
       name: attachment.name,
       previewText: attachment.preview?.text ?? null,
+      dataBase64: attachment.mimeType === 'application/pdf' ? attachment.dataBase64 : null,
+      textContent: attachment.mimeType.startsWith('text/')
+        ? readAttachmentTextContent(attachment)
+        : null,
     });
   }
 

@@ -4,6 +4,7 @@ import {
   MIN_PANEL_WIDTH,
   PANEL_PREFERENCE_STORAGE_KEY,
 } from './constants.js';
+import { parseLocalFileReference } from './file-preview-utils.js';
 
 export function clampPanelWidth(width, fallbackWidth) {
   const numericWidth = Number(width);
@@ -585,6 +586,14 @@ export function getMarkdownParser() {
     linkify: true,
     breaks: true,
   });
+  const defaultValidateLink = parser.validateLink?.bind(parser) ?? (() => true);
+  parser.validateLink = (url) => {
+    if (String(url ?? '').trim().startsWith('file://')) {
+      return true;
+    }
+
+    return defaultValidateLink(url);
+  };
 
   const defaultLinkOpen =
     parser.renderer.rules.link_open ??
@@ -592,8 +601,23 @@ export function getMarkdownParser() {
 
   parser.renderer.rules.link_open = (tokens, idx, options, env, self) => {
     const token = tokens[idx];
-    ensureTokenAttribute(token, 'target', '_blank');
-    ensureTokenAttribute(token, 'rel', 'noreferrer noopener');
+    const href = getTokenAttribute(token, 'href');
+    const localFileReference = parseLocalFileReference(href);
+
+    if (localFileReference) {
+      ensureTokenAttribute(token, 'data-local-file-path', localFileReference.path);
+      if (localFileReference.line) {
+        ensureTokenAttribute(token, 'data-local-file-line', String(localFileReference.line));
+      }
+      if (localFileReference.column) {
+        ensureTokenAttribute(token, 'data-local-file-column', String(localFileReference.column));
+      }
+      appendTokenClass(token, 'message-local-file-link');
+    } else {
+      ensureTokenAttribute(token, 'target', '_blank');
+      ensureTokenAttribute(token, 'rel', 'noreferrer noopener');
+    }
+
     return defaultLinkOpen(tokens, idx, options, env, self);
   };
 
@@ -609,6 +633,23 @@ export function ensureTokenAttribute(token, name, value) {
   }
 
   token.attrPush([name, value]);
+}
+
+export function getTokenAttribute(token, name) {
+  const index = token.attrIndex(name);
+  return index >= 0 ? token.attrs[index][1] : null;
+}
+
+export function appendTokenClass(token, className) {
+  const currentClassName = getTokenAttribute(token, 'class');
+  if (!currentClassName) {
+    ensureTokenAttribute(token, 'class', className);
+    return;
+  }
+
+  const classNames = new Set(currentClassName.split(/\s+/).filter(Boolean));
+  classNames.add(className);
+  ensureTokenAttribute(token, 'class', [...classNames].join(' '));
 }
 
 export function escapeHtml(text) {

@@ -46,6 +46,7 @@ export function createAppController({
     sessionSettingsRequestInFlight: false,
     sessionSettingsPendingThreadId: null,
     sessionSettingsUiError: null,
+    filePreviewState: null,
     boundConversationScroll: null,
     conversationScrollFramePending: false,
     suppressConversationScrollHandling: false,

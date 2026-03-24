@@ -26,8 +26,10 @@
 }
 
 .history-dialog-shell .history-picker {
-  max-height: calc(min(720px, calc(100vh - 48px)) - 120px);
-  overflow: auto;
+  max-height: none;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 #conversation-body {
@@ -796,4 +798,3 @@
 .message-markdown > :first-child {
   margin-top: 0;
 }
-

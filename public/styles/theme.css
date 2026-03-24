@@ -1,3 +1,4 @@
+@media (max-width: 760px) {
   .composer-nav-toggle--subtle {
     align-self: flex-start;
   }
@@ -143,6 +144,15 @@ body[data-theme="dark"] {
   color: #e6eef8;
 }
 
+@media (max-width: 760px) {
+  body[data-theme="dark"] {
+    background:
+      radial-gradient(circle at top left, rgba(83, 122, 168, 0.18), transparent 34%),
+      radial-gradient(circle at bottom right, rgba(32, 96, 124, 0.18), transparent 28%),
+      linear-gradient(160deg, #0c141d, #162432);
+  }
+}
+
 body[data-theme="dark"] .auth-card,
 body[data-theme="dark"] .history-dialog-frame,
 body[data-theme="dark"] .project-dialog-frame,
@@ -253,7 +263,8 @@ body[data-theme="dark"] .auth-theme-toggle:hover {
 }
 
 .layout[data-theme="dark"] .sidebar-footer {
-  background: linear-gradient(180deg, rgba(11, 18, 27, 0), rgba(11, 18, 27, 0.94) 32%);
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .layout[data-theme="dark"] .sidebar-theme-toggle {
@@ -571,10 +582,6 @@ body[data-theme="dark"] .history-dialog-frame .history-picker {
   background: rgba(16, 26, 38, 0.8);
 }
 
-body[data-theme="dark"] .history-dialog-frame .history-section-title {
-  color: #9fb6cb;
-}
-
 body[data-theme="dark"] .history-dialog-frame .session-item {
   border-color: rgba(159, 182, 203, 0.14);
   background: rgba(24, 38, 53, 0.92);
@@ -658,7 +665,8 @@ body[data-theme="dark"] .mobile-drawer-shell .sidebar-logout-button {
 }
 
 body[data-theme="dark"] .mobile-drawer-shell .sidebar-footer {
-  background: linear-gradient(180deg, rgba(11, 18, 27, 0), rgba(11, 18, 27, 0.94) 32%);
+  background: transparent;
+  backdrop-filter: none;
 }
 
 body[data-theme="dark"] .mobile-drawer-shell .sidebar-theme-toggle {

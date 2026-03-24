@@ -17,10 +17,20 @@ import {
   setRenameDialogSession,
 } from './dom-utils.js';
 import {
+  buildAttachmentDownloadUrl,
+  buildLocalFilePreviewUrl,
+  getDisplayName,
+  isImageFile,
+  isTextLikeFile,
+  normalizeFileLocation,
+  readAttachmentTextContent,
+} from './file-preview-utils.js';
+import {
   buildOptimisticUserContent,
   canInterruptTurn,
   canSendTurn,
   createInitialSessionSettings,
+  findConversationAttachment,
   getComposerAttachmentError,
   normalizeComposerAttachments,
   normalizeSessionSettings,
@@ -542,6 +552,140 @@ export function createSessionControllerApi(ctx) {
       ctx.applyAction({ type: 'history_dialog_closed' });
       await ctx.controller.loadSessions();
       return threadId;
+    },
+    async openLocalFilePreview(filePath, line = null, column = null) {
+      const normalizedPath = String(filePath ?? '').trim();
+      if (!normalizedPath) {
+        return null;
+      }
+
+      try {
+        const preview = await ctx.requestProtectedJson(buildLocalFilePreviewUrl(normalizedPath));
+        if (!preview) {
+          return null;
+        }
+
+        if (preview.kind === 'text') {
+          ctx.filePreviewState = {
+            open: true,
+            kind: 'text',
+            name: preview.name,
+            path: preview.path,
+            mimeType: preview.mimeType,
+            content: preview.content,
+            line,
+            column,
+          };
+          ctx.render();
+          return ctx.filePreviewState;
+        }
+
+        if (preview.kind === 'image') {
+          ctx.filePreviewState = {
+            open: true,
+            kind: 'image',
+            name: preview.name,
+            path: preview.path,
+            mimeType: preview.mimeType,
+            imageUrl: preview.contentUrl,
+            line,
+            column,
+          };
+          ctx.render();
+          return ctx.filePreviewState;
+        }
+
+        ctx.controller.triggerDownload(preview.downloadUrl, preview.name);
+        return preview;
+      } catch (error) {
+        ctx.filePreviewState = {
+          open: true,
+          kind: 'error',
+          title: '文件预览失败',
+          message: error?.message ?? '无法打开本地文件。',
+          name: getDisplayName(normalizedPath),
+          path: normalizedPath,
+          line,
+          column,
+        };
+        ctx.render();
+        return ctx.filePreviewState;
+      }
+    },
+    openConversationAttachment(itemId, attachmentIndex) {
+      const detail = ctx.state.sessionDetailsById?.[ctx.state.selectedSessionId] ?? null;
+      const attachment = findConversationAttachment(detail, itemId, attachmentIndex);
+      if (!attachment) {
+        return null;
+      }
+
+      if (isImageFile(attachment)) {
+        const imageUrl = buildAttachmentDownloadUrl(attachment);
+        if (!imageUrl) {
+          return null;
+        }
+
+        ctx.filePreviewState = {
+          open: true,
+          kind: 'image',
+          name: attachment.name,
+          path: null,
+          mimeType: attachment.mimeType,
+          imageUrl,
+          line: null,
+          column: null,
+        };
+        ctx.render();
+        return ctx.filePreviewState;
+      }
+
+      if (isTextLikeFile(attachment)) {
+        ctx.filePreviewState = {
+          open: true,
+          kind: 'text',
+          name: attachment.name,
+          path: null,
+          mimeType: attachment.mimeType,
+          content: readAttachmentTextContent(attachment) ?? '',
+          line: null,
+          column: null,
+        };
+        ctx.render();
+        return ctx.filePreviewState;
+      }
+
+      const downloadUrl = buildAttachmentDownloadUrl(attachment);
+      if (!downloadUrl) {
+        return null;
+      }
+
+      ctx.controller.triggerDownload(downloadUrl, attachment.name);
+      return { downloadUrl, name: attachment.name };
+    },
+    closeFilePreview() {
+      ctx.filePreviewState = null;
+      ctx.render();
+      return null;
+    },
+    triggerDownload(url, name = 'download') {
+      if (!url) {
+        return null;
+      }
+
+      const link = ctx.documentRef?.createElement?.('a');
+      if (!link) {
+        return null;
+      }
+
+      link.href = url;
+      link.download = name;
+      link.target = '';
+      link.rel = '';
+      link.style.display = 'none';
+      ctx.documentRef?.body?.appendChild?.(link);
+      link.click?.();
+      ctx.documentRef?.body?.removeChild?.(link);
+      return { url, name };
     },
     openProjectDialog() {
       openDialog(ctx.documentRef?.querySelector?.('#project-dialog'));
