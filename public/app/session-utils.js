@@ -14,6 +14,11 @@ import {
   isConversationNearBottom,
   scrollConversationToBottom,
 } from './dom-utils.js';
+import {
+  buildRewritePromptEnvelope,
+  firstNonEmptyText,
+  getDisplayTextFromPrompt,
+} from './text-utils.js';
 
 export function canSendTurn(state, draftText = state.composerDraft) {
   if (!isAuthenticatedAppState(state)) {
@@ -69,12 +74,14 @@ export function extractUserText(item) {
     return '';
   }
 
-  return item.content
+  const rawText = item.content
     .map((entry) => {
       return entry.type === 'text' ? entry.text ?? '' : '';
     })
     .filter(Boolean)
     .join('\n');
+
+  return getDisplayTextFromPrompt(rawText);
 }
 
 export function collectUserMessageAttachments(item) {
@@ -135,6 +142,143 @@ export function findConversationAttachment(thread, itemId, attachmentIndex) {
   }
 
   return null;
+}
+
+export function findLatestUserQuestion(thread) {
+  const turns = Array.isArray(thread?.turns) ? thread.turns : [];
+  for (let turnIndex = turns.length - 1; turnIndex >= 0; turnIndex -= 1) {
+    const turn = turns[turnIndex];
+    const item = (turn?.items ?? []).find((entry) => entry?.type === 'userMessage') ?? null;
+    if (!item) {
+      continue;
+    }
+
+    return {
+      turnIndex,
+      turn,
+      item,
+      text: extractUserText(item),
+      attachments: collectUserMessageAttachments(item),
+    };
+  }
+
+  return null;
+}
+
+export function getRewriteLastQuestionAction(state) {
+  if (!isAuthenticatedAppState(state)) {
+    return { visible: false, disabled: true, title: '登录后才可重写上个问题' };
+  }
+
+  const sessionId = String(state?.selectedSessionId ?? '').trim();
+  if (!sessionId) {
+    return { visible: false, disabled: true, title: '选择会话后才可重写上个问题' };
+  }
+
+  const detail = state?.sessionDetailsById?.[sessionId] ?? null;
+  if (!detail) {
+    return { visible: false, disabled: true, title: '加载会话详情后才可重写上个问题' };
+  }
+
+  const latestQuestion = findLatestUserQuestion(detail);
+  if (!latestQuestion?.text?.trim()) {
+    return { visible: false, disabled: true, title: '当前会话没有可重写的上一条问题' };
+  }
+
+  const sessionMeta = detail ?? findThreadMeta(state?.projects ?? [], sessionId);
+  const status = state?.turnStatusBySession?.[sessionId] ?? 'idle';
+  if (status === 'started' || status === 'interrupting') {
+    return { visible: true, disabled: true, title: '当前回合执行中，暂时不能重写上个问题' };
+  }
+
+  if (
+    sessionMeta?.waitingOnApproval ||
+    Number(sessionMeta?.pendingApprovalCount ?? 0) > 0
+  ) {
+    return { visible: true, disabled: true, title: '等待审批完成后再重写上个问题' };
+  }
+
+  if (
+    sessionMeta?.waitingOnQuestion ||
+    Number(sessionMeta?.pendingQuestionCount ?? 0) > 0
+  ) {
+    return { visible: true, disabled: true, title: '等待当前提问完成后再重写上个问题' };
+  }
+
+  if ((latestQuestion.attachments ?? []).length > 0) {
+    return { visible: true, disabled: true, title: '最后一个问题包含附件，暂不支持重写' };
+  }
+
+  return {
+    visible: true,
+    disabled: false,
+    title: '重写上个问题，并在新会话中从该问题之前重新运行',
+  };
+}
+
+export function buildRewriteLastQuestionPrompt(thread, rewrittenText, metadata = {}) {
+  const latestQuestion = findLatestUserQuestion(thread);
+  const normalizedText = String(rewrittenText ?? '').trim();
+  if (!latestQuestion || !normalizedText) {
+    return null;
+  }
+
+  const transcript = buildRewriteReplayTranscript(thread, latestQuestion.turnIndex);
+  const prompt = [
+    transcript
+      ? 'Continue this conversation branch from the transcript below. The final user message from the original thread has been replaced.'
+      : 'Treat this as a replacement for the original first user message from another branch.',
+    '',
+    transcript ? `Conversation so far:\n${transcript}` : '',
+    transcript ? '' : '',
+    `Edited replacement message:\n${normalizedText}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return buildRewritePromptEnvelope({
+    displayText: normalizedText,
+    metadata,
+    prompt,
+  });
+}
+
+export function buildRewriteReplayTranscript(thread, beforeTurnIndex) {
+  const turns = Array.isArray(thread?.turns) ? thread.turns.slice(0, beforeTurnIndex) : [];
+  const entries = turns.flatMap((turn) =>
+    (turn?.items ?? [])
+      .map((item) => formatReplayTranscriptEntry(item))
+      .filter(Boolean),
+  );
+  return entries.join('\n\n');
+}
+
+export function formatReplayTranscriptEntry(item) {
+  if (item?.type === 'userMessage') {
+    const body = buildReplayUserMessageBody(item);
+    return body ? `User:\n${body}` : null;
+  }
+
+  if (item?.type === 'agentMessage') {
+    const text = firstNonEmptyText(item.text);
+    return text ? `Assistant:\n${text}` : null;
+  }
+
+  return null;
+}
+
+export function buildReplayUserMessageBody(item) {
+  const text = extractUserText(item);
+  const attachments = collectUserMessageAttachments(item);
+  const attachmentLines = attachments.map((attachment) => {
+    const title = attachment.name ?? inferAttachmentLabel(attachment);
+    const preview = firstNonEmptyText(attachment.previewText);
+    return preview
+      ? `[Attachment: ${title}] ${preview}`
+      : `[Attachment: ${title}]`;
+  });
+
+  return [text, ...attachmentLines].filter(Boolean).join('\n');
 }
 
 export function formatStatus(status) {

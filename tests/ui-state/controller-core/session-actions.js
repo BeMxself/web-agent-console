@@ -13,6 +13,7 @@ import {
   jsonResponse,
   jsonErrorResponse,
 } from '../shared.js';
+import { parseRewritePromptEnvelope } from '../../../public/app/text-utils.js';
 
 
 test('browser app posts pending question responses through the pending-action route', async () => {
@@ -450,6 +451,290 @@ test('browser app windows large sessions from the latest turns and expands older
   assert.equal(fakeDocument.conversationScroll.scrollTop, 1440);
 });
 
+test('browser app rewrites the last question into a branched session rerun', async () => {
+  const requests = [];
+  const fakeDocument = createFakeDocument();
+  const fakeEventSource = createFakeEventSource();
+  let sessionsResponseCount = 0;
+
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        sessionsResponseCount += 1;
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions:
+                sessionsResponseCount > 1
+                  ? [
+                      { id: 'thread-1', name: 'Focus thread', cwd: '/tmp/workspace-a' },
+                      { id: 'thread-branch', name: 'Branch thread', cwd: '/tmp/workspace-a' },
+                    ]
+                  : [{ id: 'thread-1', name: 'Focus thread', cwd: '/tmp/workspace-a' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'userMessage',
+                    id: 'user-1',
+                    content: [{ type: 'text', text: 'Original question', text_elements: [] }],
+                  },
+                  {
+                    type: 'agentMessage',
+                    id: 'agent-1',
+                    text: 'Original answer',
+                  },
+                ],
+              },
+              {
+                id: 'turn-2',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'userMessage',
+                    id: 'user-2',
+                    content: [{ type: 'text', text: 'Latest question', text_elements: [] }],
+                  },
+                  {
+                    type: 'agentMessage',
+                    id: 'agent-2',
+                    text: 'Stale answer',
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-branch') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-branch',
+            name: 'Branch thread',
+            cwd: '/tmp/workspace-a',
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      if (url === '/api/projects/%2Ftmp%2Fworkspace-a/sessions' && options.method === 'POST') {
+        requests.push({ url, method: options.method });
+        return jsonResponse(
+          {
+            thread: {
+              id: 'thread-branch',
+              name: 'Branch thread',
+              cwd: '/tmp/workspace-a',
+            },
+          },
+          201,
+        );
+      }
+
+      if (url === '/api/sessions/thread-branch/settings' && options.method === 'POST') {
+        requests.push({
+          url,
+          method: options.method,
+          body: JSON.parse(options.body),
+        });
+        return jsonResponse({
+          model: 'gpt-5.4',
+          reasoningEffort: 'high',
+        });
+      }
+
+      if (url === '/api/sessions/thread-branch/turns' && options.method === 'POST') {
+        requests.push({
+          url,
+          method: options.method,
+          body: JSON.parse(options.body),
+        });
+        return jsonResponse({ turnId: 'turn-new', status: 'started' }, 202);
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          modelOptions: [{ value: 'gpt-5.4', label: 'gpt-5.4' }],
+          reasoningEffortOptions: [{ value: 'high', label: 'high' }],
+          defaults: { model: null, reasoningEffort: null },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: 'gpt-5.4',
+          reasoningEffort: 'high',
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  assert.equal(fakeDocument.rewriteLastQuestionButton.hidden, false);
+  assert.equal(fakeDocument.rewriteLastQuestionButton.disabled, false);
+
+  fakeDocument.rewriteLastQuestionButton.click();
+
+  assert.equal(fakeDocument.rewriteDialog.open, true);
+  assert.equal(fakeDocument.rewriteDialogInput.value, 'Latest question');
+
+  fakeDocument.rewriteDialogInput.value = 'Edited question';
+  fakeDocument.rewriteDialogForm.dispatchEvent({
+    type: 'submit',
+    preventDefault() {},
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(fakeDocument.rewriteDialog.open, false);
+  assert.equal(app.getState().selectedSessionId, 'thread-branch');
+  assert.equal(app.getState().turnStatusBySession['thread-branch'], 'started');
+  assert.match(fakeDocument.conversationBody.innerHTML, /Edited question/);
+  assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, /Original question/);
+  assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, /Continue this conversation branch/);
+
+  const turnRequest = requests.find((entry) => entry.url === '/api/sessions/thread-branch/turns');
+  assert.ok(turnRequest);
+  assert.equal(turnRequest.body.model, 'gpt-5.4');
+  assert.equal(turnRequest.body.reasoningEffort, 'high');
+  const parsedPrompt = parseRewritePromptEnvelope(turnRequest.body.text);
+  assert.equal(parsedPrompt.metadata.displayText, 'Edited question');
+  assert.match(parsedPrompt.prompt, /Original question/);
+  assert.match(parsedPrompt.prompt, /Original answer/);
+  assert.match(parsedPrompt.prompt, /Edited question/);
+  assert.doesNotMatch(parsedPrompt.prompt, /Stale answer/);
+  assert.doesNotMatch(parsedPrompt.prompt, /Latest question/);
+});
+
+test('browser app disables rewriting the last question when it contains attachments', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Attachment thread', cwd: '/tmp/workspace-a' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Attachment thread',
+            cwd: '/tmp/workspace-a',
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'userMessage',
+                    id: 'user-1',
+                    content: [
+                      { type: 'text', text: 'Question with attachment', text_elements: [] },
+                      { type: 'image', url: 'data:image/png;base64,Zm9v', name: 'diagram.png', mimeType: 'image/png' },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          modelOptions: [{ value: '', label: '默认' }],
+          reasoningEffortOptions: [{ value: '', label: '默认' }],
+          defaults: { model: null, reasoningEffort: null },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: null,
+          reasoningEffort: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  assert.equal(fakeDocument.rewriteLastQuestionButton.hidden, false);
+  assert.equal(fakeDocument.rewriteLastQuestionButton.disabled, true);
+  assert.match(fakeDocument.rewriteLastQuestionButton.title, /附件/);
+  fakeDocument.rewriteLastQuestionButton.click();
+  assert.equal(fakeDocument.rewriteDialog.open, false);
+});
+
 test('browser app loads approval mode, toggles it, and refreshes pending approvals after approval sse events', async () => {
   const fakeEventSource = createFakeEventSource();
   const fakeDocument = createFakeDocument();
@@ -596,4 +881,3 @@ test('browser app loads approval mode, toggles it, and refreshes pending approva
   assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, /Run npm test/);
   assert.match(fakeDocument.conversationBody.innerHTML, /Review src\\\/app\.js/);
 });
-

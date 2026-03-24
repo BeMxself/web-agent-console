@@ -18,6 +18,7 @@ import {
 } from './dom-utils.js';
 import {
   findProject,
+  getDisplayThreadPreview,
   getPendingSessionProject,
   getThreadTitle,
   resolveSelectedSessionTitle,
@@ -206,7 +207,9 @@ export function renderThreadDetail(
     `<span class="meta-chip">${escapeHtml(formatStatus(session.status))}</span>`,
     `<span class="meta-chip">${escapeHtml(formatTimestamp(session.updatedAt ?? session.createdAt))}</span>`,
     '</div>',
-    session.preview ? `<p class="thread-preview">${escapeHtml(session.preview)}</p>` : '',
+    getDisplayThreadPreview(session)
+      ? `<p class="thread-preview">${escapeHtml(getDisplayThreadPreview(session))}</p>`
+      : '',
     renderThreadApprovals(session, approvalUiState),
     renderThreadPendingQuestions(session, pendingActionUiState),
     renderThreadSubagents(session),

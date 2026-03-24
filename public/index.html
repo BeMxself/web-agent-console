@@ -83,6 +83,7 @@
                   <input id="composer-image-input" type="file" accept="image/*" multiple hidden />
                 </div>
                 <div class="composer-actions">
+                  <button type="button" id="rewrite-last-question-button" hidden>重写上个问题</button>
                   <button type="submit" id="send-button">发送</button>
                   <button type="button" id="interrupt-button">中断</button>
                 </div>
@@ -197,6 +198,31 @@
         <div class="dialog-actions">
           <button class="dialog-button" type="button" data-rename-dialog-close="true">取消</button>
           <button class="dialog-button dialog-button--primary" type="submit">保存名称</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="rewrite-dialog" class="project-dialog-frame">
+      <form id="rewrite-dialog-form" class="project-dialog-shell">
+        <div class="dialog-header">
+          <div>
+            <div class="dialog-eyebrow">重写上个问题</div>
+            <h2 class="dialog-title" id="rewrite-dialog-session-title">当前会话</h2>
+          </div>
+          <button class="history-dialog-close" type="button" data-rewrite-dialog-close="true" aria-label="关闭">×</button>
+        </div>
+        <label class="dialog-field">
+          <span>编辑后的问题</span>
+          <textarea
+            id="rewrite-dialog-input"
+            class="dialog-input dialog-input--multiline"
+            name="rewrittenQuestion"
+            rows="8"
+            placeholder="输入编辑后的问题"
+          ></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button class="dialog-button" type="button" data-rewrite-dialog-close="true">取消</button>
+          <button class="dialog-button dialog-button--primary" type="submit">新开分支重跑</button>
         </div>
       </form>
     </dialog>

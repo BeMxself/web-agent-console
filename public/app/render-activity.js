@@ -9,6 +9,7 @@ import {
 import {
   canInterruptTurn,
   canSendTurn,
+  getRewriteLastQuestionAction,
   getComposerAttachmentError,
   normalizeComposerAttachments,
   renderComposerAttachmentCard,
@@ -380,8 +381,9 @@ export function isComposerSettingsCollapsed(state, scopeId = getComposerSettings
   return true;
 }
 
-export function syncComposerButtons(sendButton, interruptButton, state) {
+export function syncComposerButtons(sendButton, interruptButton, rewriteButton, state) {
   const primaryAction = resolveComposerPrimaryAction(state);
+  const rewriteAction = getRewriteLastQuestionAction(state);
 
   if (sendButton) {
     if (sendButton.textContent !== primaryAction.label) {
@@ -397,6 +399,25 @@ export function syncComposerButtons(sendButton, interruptButton, state) {
       if (sendButton.dataset.action !== primaryAction.kind) {
         sendButton.dataset.action = primaryAction.kind;
       }
+    }
+  }
+
+  if (rewriteButton) {
+    const nextHidden = !rewriteAction.visible;
+    if (rewriteButton.hidden !== nextHidden) {
+      rewriteButton.hidden = nextHidden;
+    }
+    if (rewriteButton.textContent !== '重写上个问题') {
+      rewriteButton.textContent = '重写上个问题';
+    }
+    if (rewriteButton.disabled !== Boolean(rewriteAction.disabled)) {
+      rewriteButton.disabled = Boolean(rewriteAction.disabled);
+    }
+    if (rewriteButton.title !== rewriteAction.title) {
+      rewriteButton.title = rewriteAction.title;
+    }
+    if (rewriteButton.dataset && rewriteButton.dataset.action !== 'rewrite-last-question') {
+      rewriteButton.dataset.action = 'rewrite-last-question';
     }
   }
 

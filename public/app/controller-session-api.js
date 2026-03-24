@@ -30,11 +30,14 @@ import {
 } from './file-preview-utils.js';
 import {
   buildOptimisticUserContent,
+  buildRewriteLastQuestionPrompt,
   canInterruptTurn,
   canSendTurn,
   createInitialSessionSettings,
+  findLatestUserQuestion,
   findConversationAttachment,
   getComposerAttachmentError,
+  getRewriteLastQuestionAction,
   normalizeComposerAttachments,
   normalizeSessionSettings,
 } from './session-utils.js';
@@ -43,7 +46,7 @@ import {
   isComposerSettingsCollapsed,
   isTaskSummaryCollapsed,
 } from './render-activity.js';
-import { findProject, findThreadMeta } from './project-utils.js';
+import { findProject, findProjectBySessionId, findThreadMeta } from './project-utils.js';
 
 export function createSessionControllerApi(ctx) {
   return {
@@ -793,6 +796,109 @@ export function createSessionControllerApi(ctx) {
       openDialog(ctx.documentRef?.querySelector?.('#rename-dialog'));
       focusRenameInput(ctx.documentRef);
       return renameId;
+    },
+    openRewriteDialog(sessionId = ctx.state.selectedSessionId) {
+      const targetSessionId = String(sessionId ?? ctx.state.selectedSessionId ?? '').trim();
+      const action = getRewriteLastQuestionAction(ctx.state);
+      const detail = ctx.state.sessionDetailsById?.[targetSessionId] ?? null;
+      const latestQuestion = findLatestUserQuestion(detail);
+      if (!targetSessionId || action.disabled || !latestQuestion?.text?.trim()) {
+        return null;
+      }
+
+      const project =
+        findProjectBySessionId(ctx.state.projects ?? [], targetSessionId) ??
+        findProject(ctx.state.projects ?? [], detail?.cwd ?? '');
+      if (!project) {
+        return null;
+      }
+
+      ctx.pendingRewriteQuestion = {
+        sessionId: targetSessionId,
+        projectId: project.id ?? project.cwd ?? detail.cwd,
+        sourceTurnIndex: latestQuestion.turnIndex,
+        originalText: latestQuestion.text,
+      };
+
+      const titleNode = ctx.documentRef?.querySelector?.('#rewrite-dialog-session-title');
+      if (titleNode && titleNode.textContent !== (detail?.name ?? detail?.id ?? '当前会话')) {
+        titleNode.textContent = detail?.name ?? detail?.id ?? '当前会话';
+      }
+
+      const input = ctx.documentRef?.querySelector?.('#rewrite-dialog-input');
+      if (input) {
+        input.value = latestQuestion.text;
+      }
+
+      openDialog(ctx.documentRef?.querySelector?.('#rewrite-dialog'));
+      input?.focus?.();
+      input?.select?.();
+      return ctx.pendingRewriteQuestion;
+    },
+    closeRewriteDialog() {
+      ctx.pendingRewriteQuestion = null;
+      const input = ctx.documentRef?.querySelector?.('#rewrite-dialog-input');
+      if (input) {
+        input.value = '';
+      }
+      closeDialog(ctx.documentRef?.querySelector?.('#rewrite-dialog'));
+      return null;
+    },
+    async submitRewrittenQuestion(text) {
+      const pendingRewrite = ctx.pendingRewriteQuestion;
+      const normalizedText = String(text ?? '').trim();
+      if (!pendingRewrite || !normalizedText) {
+        return null;
+      }
+
+      const sourceDetail = ctx.state.sessionDetailsById?.[pendingRewrite.sessionId] ?? null;
+      if (!sourceDetail) {
+        return null;
+      }
+
+      const replayPrompt = buildRewriteLastQuestionPrompt(sourceDetail, normalizedText, {
+        sourceThreadId: pendingRewrite.sessionId,
+        sourceThreadName: sourceDetail.name ?? sourceDetail.id ?? '',
+      });
+      if (!replayPrompt) {
+        return null;
+      }
+
+      const sourceSettings = normalizeSessionSettings(
+        ctx.state.sessionSettingsById?.[pendingRewrite.sessionId],
+      );
+      const created = await ctx.requestProtectedJson(
+        `/api/projects/${encodeURIComponent(pendingRewrite.projectId)}/sessions`,
+        {
+          method: 'POST',
+        },
+      );
+      if (!created?.thread?.id) {
+        return null;
+      }
+
+      await ctx.controller.loadSessions();
+      await ctx.controller.selectSession(created.thread.id);
+
+      const hasNonDefaultSettings =
+        sourceSettings.model ||
+        sourceSettings.reasoningEffort ||
+        sourceSettings.agentType ||
+        sourceSettings.sandboxMode;
+      if (hasNonDefaultSettings) {
+        await ctx.controller.setSessionSettings(created.thread.id, sourceSettings);
+      }
+
+      const result = await ctx.controller.sendTurn(replayPrompt);
+      if (!result) {
+        return null;
+      }
+
+      ctx.controller.closeRewriteDialog();
+      return {
+        ...result,
+        threadId: created.thread.id,
+      };
     },
     closeRenameDialog() {
       ctx.pendingRenameSessionId = null;

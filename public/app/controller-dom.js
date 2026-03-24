@@ -266,6 +266,7 @@ export function renderApp(ctx) {
     const composerFileInput = ctx.documentRef.querySelector('#composer-file-input');
     const composerImageInput = ctx.documentRef.querySelector('#composer-image-input');
     const conversationNavToggle = ctx.documentRef.querySelector('#conversation-nav-toggle');
+    const rewriteLastQuestionButton = ctx.documentRef.querySelector('#rewrite-last-question-button');
     const sendButton = ctx.documentRef.querySelector('#send-button');
     const interruptButton = ctx.documentRef.querySelector('#interrupt-button');
     const composer = ctx.documentRef.querySelector('#composer');
@@ -319,7 +320,7 @@ export function renderApp(ctx) {
     syncComposerAttachmentError(composerAttachmentError, ctx.state);
     syncComposerInlineFeedback(composerInlineFeedback, ctx.state);
     syncConversationNavToggle(conversationNavToggle, ctx.state.showConversationNav);
-    syncComposerButtons(sendButton, interruptButton, ctx.state);
+    syncComposerButtons(sendButton, interruptButton, rewriteLastQuestionButton, ctx.state);
     syncComposerAttachmentActions(
       composerUploadFileButton,
       composerUploadFileAction,
@@ -649,6 +650,7 @@ export function bindControllerDocumentEvents(ctx) {
     const composerUploadImageButton = ctx.documentRef.querySelector('#composer-upload-image');
     const composerFileInput = ctx.documentRef.querySelector('#composer-file-input');
     const composerImageInput = ctx.documentRef.querySelector('#composer-image-input');
+    const rewriteLastQuestionButton = ctx.documentRef.querySelector('#rewrite-last-question-button');
     const interruptButton = ctx.documentRef.querySelector('#interrupt-button');
     const conversationBody = ctx.documentRef.querySelector('#conversation-body');
     const activityPanel = ctx.documentRef.querySelector('#activity-panel');
@@ -661,6 +663,9 @@ export function bindControllerDocumentEvents(ctx) {
     const renameDialog = ctx.documentRef.querySelector('#rename-dialog');
     const renameDialogForm = ctx.documentRef.querySelector('#rename-dialog-form');
     const renameDialogInput = ctx.documentRef.querySelector('#rename-dialog-input');
+    const rewriteDialog = ctx.documentRef.querySelector('#rewrite-dialog');
+    const rewriteDialogForm = ctx.documentRef.querySelector('#rewrite-dialog-form');
+    const rewriteDialogInput = ctx.documentRef.querySelector('#rewrite-dialog-input');
     const projectPanelToggle = ctx.documentRef.querySelector('#project-panel-toggle');
     const activityPanelToggle = ctx.documentRef.querySelector('#activity-panel-toggle');
     const conversationNavToggle = ctx.documentRef.querySelector('#conversation-nav-toggle');
@@ -723,6 +728,10 @@ export function bindControllerDocumentEvents(ctx) {
 
     interruptButton?.addEventListener('click', () => {
       void ctx.controller.interruptTurn();
+    });
+
+    rewriteLastQuestionButton?.addEventListener('click', () => {
+      void ctx.controller.openRewriteDialog();
     });
 
     conversationBody?.addEventListener('click', (event) => {
@@ -794,6 +803,12 @@ export function bindControllerDocumentEvents(ctx) {
       }
     });
 
+    rewriteDialog?.addEventListener?.('close', () => {
+      if (ctx.pendingRewriteQuestion) {
+        ctx.controller.closeRewriteDialog();
+      }
+    });
+
     mobileDrawer?.addEventListener?.('close', () => {
       if (ctx.state.mobileDrawerOpen) {
         ctx.controller.closeMobileDrawer();
@@ -830,6 +845,17 @@ export function bindControllerDocumentEvents(ctx) {
     renameDialogForm?.addEventListener('submit', (event) => {
       event.preventDefault();
       void ctx.controller.renameSession(ctx.pendingRenameSessionId, renameDialogInput?.value ?? '');
+    });
+
+    for (const button of rewriteDialog?.querySelectorAll?.('[data-rewrite-dialog-close]') ?? []) {
+      button.addEventListener('click', () => {
+        ctx.controller.closeRewriteDialog();
+      });
+    }
+
+    rewriteDialogForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void ctx.controller.submitRewrittenQuestion(rewriteDialogInput?.value ?? '');
     });
   }
 }

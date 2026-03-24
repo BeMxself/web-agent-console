@@ -38,6 +38,7 @@ export function createAppController({
     eventSource: null,
     statusTimer: null,
     pendingRenameSessionId: null,
+    pendingRewriteQuestion: null,
     approvalModeRequestInFlight: false,
     approvalRequestIdsInFlight: new Set(),
     approvalUiError: null,

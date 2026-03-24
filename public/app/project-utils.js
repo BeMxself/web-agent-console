@@ -5,7 +5,7 @@ import {
   normalizePendingQuestionEntry,
   normalizePendingQuestions,
 } from './thread-utils.js';
-import { preferThreadText } from './text-utils.js';
+import { getDisplayTextFromPrompt, preferThreadText } from './text-utils.js';
 
 export function keepSelectedSession(projects, selectedSessionId) {
   if (!selectedSessionId) {
@@ -139,6 +139,22 @@ export function updateProject(projects, projectId, updater) {
 
 export function findProject(projects, projectId) {
   return projects.find((project) => (project.id ?? project.cwd ?? '__unknown__') === projectId);
+}
+
+export function findProjectBySessionId(projects, threadId) {
+  for (const project of projects ?? []) {
+    for (const session of [
+      ...(project.focusedSessions ?? []),
+      ...(project.historySessions?.active ?? []),
+      ...(project.historySessions?.archived ?? []),
+    ]) {
+      if (session?.id === threadId) {
+        return project;
+      }
+    }
+  }
+
+  return null;
 }
 
 export function syncThreadIntoProjects(projects, thread) {
@@ -433,7 +449,7 @@ export function getThreadTitle(session) {
     return null;
   }
 
-  return [session.name, session.preview, session.id].find((value) => {
+  return [session.name, getDisplayThreadPreview(session), session.id].find((value) => {
     if (typeof value === 'string') {
       return value.trim().length > 0;
     }
@@ -448,7 +464,7 @@ export function getThreadSubtitle(session) {
   }
 
   const title = getThreadTitle(session);
-  for (const candidate of [session.preview, session.cwd, session.id]) {
+  for (const candidate of [getDisplayThreadPreview(session), session.cwd, session.id]) {
     if (typeof candidate !== 'string') {
       continue;
     }
@@ -462,6 +478,15 @@ export function getThreadSubtitle(session) {
   }
 
   return '打开后可查看完整历史';
+}
+
+export function getDisplayThreadPreview(session) {
+  const normalizedPreview = String(session?.preview ?? '').trim();
+  if (!normalizedPreview) {
+    return '';
+  }
+
+  return getDisplayTextFromPrompt(normalizedPreview);
 }
 
 export function resolveSelectedSessionTitle(state, detail) {
