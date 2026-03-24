@@ -2,6 +2,10 @@
 
 Web Agent Console 是一个本地优先的浏览器控制台，用来查看和操作命令行 Agent 会话。它把项目列表、会话历史、流式输出、审批、用户提问和附件交互集中到一个 Web 界面里，方便你在浏览器里观察和继续本地 Agent 工作流。
 
+## 社区友链
+
+- [LINUX DO](https://linux.do/)
+
 当前项目支持两条主要后端路径：
 
 - `codex`：通过受控的 `codex app-server` 驱动会话
