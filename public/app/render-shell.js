@@ -36,6 +36,8 @@ import {
   renderThreadSubagents,
 } from './render-thread-panels.js';
 import { renderTurn } from './render-turn-items.js';
+
+const approvalControlsMarkupCache = new WeakMap();
 export function renderProjectSidebar(state) {
   const header = renderProjectSidebarHeader(state.projects.length > 0, state.systemStatus);
   const footer = renderProjectSidebarFooter(state);
@@ -551,9 +553,10 @@ export function syncApprovalModeControls(
   }
 
   const nextMarkup = authLocked ? '' : String(markup ?? '');
-  const changed = node.innerHTML !== nextMarkup;
+  const changed = approvalControlsMarkupCache.get(node) !== nextMarkup;
   if (changed) {
     node.innerHTML = nextMarkup;
+    approvalControlsMarkupCache.set(node, nextMarkup);
   }
   node.hidden = authLocked;
   return changed;

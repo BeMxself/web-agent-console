@@ -818,3 +818,298 @@ test('browser app keeps the compact settings strip stable during unrelated compo
   await app.loadStatus();
   assert.equal(settingsWrites.count, initialSettingsWrites);
 });
+
+test('browser app keeps the compact settings strip stable during runtime reconciliation refreshes', async () => {
+  const fakeEventSource = createFakeEventSource();
+  const fakeDocument = createFakeDocument({ mobile: true });
+  const settingsWrites = trackInnerHtmlWrites(fakeDocument.approvalModeControls);
+  let detailReads = 0;
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-1',
+                  name: 'Idle thread',
+                  runtime: {
+                    turnStatus: 'idle',
+                    activeTurnId: null,
+                    diff: null,
+                    realtime: { status: 'idle', sessionId: null, items: [] },
+                  },
+                  settings: {
+                    model: 'gpt-5.4',
+                    reasoningEffort: 'high',
+                    agentType: 'plan',
+                    sandboxMode: 'workspace-write',
+                  },
+                },
+              ],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          modelOptions: [
+            { value: '', label: '默认' },
+            { value: 'gpt-5.4', label: 'gpt-5.4' },
+          ],
+          reasoningEffortOptions: [
+            { value: '', label: '默认' },
+            { value: 'high', label: '高' },
+          ],
+          agentTypeOptions: [
+            { value: 'default', label: '执行' },
+            { value: 'plan', label: '计划' },
+          ],
+          sandboxModeOptions: [
+            { value: 'read-only', label: '只读' },
+            { value: 'workspace-write', label: '工作区可写' },
+            { value: 'danger-full-access', label: '完全访问' },
+          ],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: 'default',
+            sandboxMode: 'danger-full-access',
+          },
+          runtimeContext: {
+            sandboxMode: 'workspace-write',
+          },
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: 'gpt-5.4',
+          reasoningEffort: 'high',
+          agentType: 'plan',
+          sandboxMode: 'workspace-write',
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        detailReads += 1;
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Idle thread',
+            cwd: '/tmp/workspace-a',
+            runtime: {
+              turnStatus: 'idle',
+              activeTurnId: null,
+              diff: null,
+              realtime: { status: 'idle', sessionId: null, items: [] },
+            },
+            settings: {
+              model: 'gpt-5.4',
+              reasoningEffort: 'high',
+              agentType: 'plan',
+              sandboxMode: 'workspace-write',
+            },
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadApprovalMode();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  const initialSettingsWrites = settingsWrites.count;
+
+  fakeEventSource.emit({
+    type: 'session_runtime_reconciled',
+    payload: {
+      threadId: 'thread-1',
+      runtime: {
+        turnStatus: 'idle',
+        activeTurnId: null,
+        diff: null,
+        realtime: { status: 'idle', sessionId: null, items: [] },
+      },
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(detailReads, 2);
+  assert.equal(settingsWrites.count, initialSettingsWrites);
+});
+
+test('browser app keeps the compact settings strip stable while realtime session updates stream in', async () => {
+  const fakeEventSource = createFakeEventSource();
+  const fakeDocument = createFakeDocument({ mobile: true });
+  const settingsWrites = trackInnerHtmlWrites(fakeDocument.approvalModeControls);
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-1',
+                  name: 'Running thread',
+                  runtime: {
+                    turnStatus: 'started',
+                    activeTurnId: 'turn-1',
+                    diff: null,
+                    realtime: {
+                      status: 'started',
+                      sessionId: 'rt-1',
+                      items: [{ index: 1, summary: 'init', value: { type: 'init' } }],
+                    },
+                  },
+                  settings: {
+                    model: 'gpt-5.4',
+                    reasoningEffort: 'high',
+                    agentType: 'plan',
+                    sandboxMode: 'workspace-write',
+                  },
+                },
+              ],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          modelOptions: [
+            { value: '', label: '默认' },
+            { value: 'gpt-5.4', label: 'gpt-5.4' },
+          ],
+          reasoningEffortOptions: [
+            { value: '', label: '默认' },
+            { value: 'high', label: '高' },
+          ],
+          agentTypeOptions: [
+            { value: 'default', label: '执行' },
+            { value: 'plan', label: '计划' },
+          ],
+          sandboxModeOptions: [
+            { value: 'read-only', label: '只读' },
+            { value: 'workspace-write', label: '工作区可写' },
+            { value: 'danger-full-access', label: '完全访问' },
+          ],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: 'default',
+            sandboxMode: 'danger-full-access',
+          },
+          runtimeContext: {
+            sandboxMode: 'workspace-write',
+          },
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: 'gpt-5.4',
+          reasoningEffort: 'high',
+          agentType: 'plan',
+          sandboxMode: 'workspace-write',
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Running thread',
+            cwd: '/tmp/workspace-a',
+            runtime: {
+              turnStatus: 'started',
+              activeTurnId: 'turn-1',
+              diff: null,
+              realtime: {
+                status: 'started',
+                sessionId: 'rt-1',
+                items: [{ index: 1, summary: 'init', value: { type: 'init' } }],
+              },
+            },
+            settings: {
+              model: 'gpt-5.4',
+              reasoningEffort: 'high',
+              agentType: 'plan',
+              sandboxMode: 'workspace-write',
+            },
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadApprovalMode();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  const initialSettingsWrites = settingsWrites.count;
+
+  fakeEventSource.emit({
+    type: 'thread_realtime_item_added',
+    payload: {
+      threadId: 'thread-1',
+      item: { type: 'progress', label: 'step-2' },
+    },
+  });
+
+  assert.equal(settingsWrites.count, initialSettingsWrites);
+});
