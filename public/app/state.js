@@ -16,6 +16,7 @@ import {
   clampPanelWidth,
   createInitialAuthState,
   createInitialSystemStatus,
+  normalizeActivityPanelTab,
   normalizeHistoryDialogTab,
   normalizeAuthState,
   normalizeMobileDrawerMode,
@@ -54,6 +55,17 @@ import {
   upsertTurnItem,
 } from './thread-utils.js';
 
+function createInitialFileBrowserState() {
+  return {
+    rootPath: null,
+    currentPath: null,
+    parentPath: null,
+    entries: [],
+    loading: false,
+    error: null,
+  };
+}
+
 export const initialState = {
   projects: [],
   selectedSessionId: null,
@@ -78,9 +90,11 @@ export const initialState = {
   historyDialogTab: 'active',
   projectPanelCollapsed: false,
   activityPanelCollapsed: true,
+  activityPanelTab: 'activity',
   persistPanelPreference: true,
   projectPanelWidth: DEFAULT_PROJECT_PANEL_WIDTH,
   activityPanelWidth: DEFAULT_ACTIVITY_PANEL_WIDTH,
+  fileBrowser: createInitialFileBrowserState(),
   theme: 'light',
   showConversationNav: true,
   mobileDrawerOpen: false,
@@ -243,6 +257,11 @@ export function reduceState(state = initialState, action) {
         ...state,
         activityPanelCollapsed: !state.activityPanelCollapsed,
       };
+    case 'activity_panel_tab_selected':
+      return {
+        ...state,
+        activityPanelTab: normalizeActivityPanelTab(action.payload?.tab),
+      };
     case 'panel_preference_changed':
       return {
         ...state,
@@ -345,6 +364,7 @@ export function reduceState(state = initialState, action) {
         composerAttachmentMenuOpen: false,
         unreadBySession: clearSessionUnread(state.unreadBySession, action.payload.id),
         subagentDialog: preserveDialog ? state.subagentDialog : null,
+        fileBrowser: createInitialFileBrowserState(),
       };
     }
     case 'subagent_dialog_opened':
@@ -365,6 +385,7 @@ export function reduceState(state = initialState, action) {
         composerAttachments: [],
         composerAttachmentError: null,
         composerAttachmentMenuOpen: false,
+        fileBrowser: createInitialFileBrowserState(),
       };
     case 'project_session_draft_cleared':
       return {
@@ -372,6 +393,43 @@ export function reduceState(state = initialState, action) {
         pendingSessionProjectId: null,
         composerAttachments: [],
         composerAttachmentError: null,
+        fileBrowser: createInitialFileBrowserState(),
+      };
+    case 'file_browser_requested':
+      return {
+        ...state,
+        fileBrowser: {
+          rootPath: action.payload.rootPath ?? null,
+          currentPath: action.payload.path ?? action.payload.rootPath ?? null,
+          parentPath: null,
+          entries: [],
+          loading: true,
+          error: null,
+        },
+      };
+    case 'file_browser_loaded':
+      return {
+        ...state,
+        fileBrowser: {
+          rootPath: action.payload.rootPath ?? null,
+          currentPath: action.payload.directory?.path ?? action.payload.rootPath ?? null,
+          parentPath: action.payload.directory?.parentPath ?? null,
+          entries: action.payload.directory?.entries ?? [],
+          loading: false,
+          error: null,
+        },
+      };
+    case 'file_browser_load_failed':
+      return {
+        ...state,
+        fileBrowser: {
+          rootPath: action.payload.rootPath ?? null,
+          currentPath: action.payload.path ?? action.payload.rootPath ?? null,
+          parentPath: null,
+          entries: [],
+          loading: false,
+          error: action.payload.error ?? '无法加载工作区文件。',
+        },
       };
     case 'session_detail_loaded':
       return replaceSessionRuntimeState({

@@ -247,6 +247,7 @@ body[data-theme="dark"] .auth-theme-toggle:hover {
 .layout[data-theme="dark"] .thread-item-card-title,
 .layout[data-theme="dark"] .task-summary-band-title,
 .layout[data-theme="dark"] .task-summary-item,
+.layout[data-theme="dark"] .file-browser-entry-name,
 .layout[data-theme="dark"] .thread-item-paragraph,
 .layout[data-theme="dark"] .message-bubble--assistant,
 .layout[data-theme="dark"] .message-bubble--system,
@@ -296,6 +297,24 @@ body[data-theme="dark"] .auth-theme-toggle:hover {
   background: rgba(29, 46, 63, 0.96);
 }
 
+.layout[data-theme="dark"] .activity-panel-tablist {
+  background: rgba(159, 182, 203, 0.12);
+}
+
+.layout[data-theme="dark"] .activity-panel-tab {
+  color: #9fb6cb;
+}
+
+.layout[data-theme="dark"] .activity-panel-tab:hover {
+  background: rgba(159, 182, 203, 0.1);
+  color: #e6eef8;
+}
+
+.layout[data-theme="dark"] .activity-panel-tab--selected {
+  background: rgba(230, 238, 248, 0.12);
+  color: #f5f8fb;
+}
+
 .layout[data-theme="dark"] .sidebar-logout-button {
   border-color: rgba(216, 115, 109, 0.18);
   background: rgba(73, 29, 28, 0.44);
@@ -316,6 +335,8 @@ body[data-theme="dark"] .auth-theme-toggle:hover {
 .layout[data-theme="dark"] .approval-card,
 .layout[data-theme="dark"] .task-summary-group,
 .layout[data-theme="dark"] .task-summary-placeholder,
+.layout[data-theme="dark"] .file-browser-meta,
+.layout[data-theme="dark"] .file-browser-entry,
 .layout[data-theme="dark"] .message-attachment-card {
   border-color: rgba(159, 182, 203, 0.14);
   box-shadow: none;
@@ -346,6 +367,26 @@ body[data-theme="dark"] .auth-theme-toggle:hover {
 .layout[data-theme="dark"] .sidebar-add-project:hover {
   background: rgba(29, 46, 63, 0.96);
   color: #f4f8fc;
+}
+
+.layout[data-theme="dark"] .file-browser-meta,
+.layout[data-theme="dark"] .file-browser-entry {
+  background: rgba(24, 38, 53, 0.9);
+}
+
+.layout[data-theme="dark"] .file-browser-entry-kind,
+.layout[data-theme="dark"] .file-browser-parent {
+  background: rgba(159, 182, 203, 0.12);
+  color: #dce7f2;
+}
+
+.layout[data-theme="dark"] .file-browser-meta-value,
+.layout[data-theme="dark"] .file-browser-entry-meta {
+  color: #9fb6cb;
+}
+
+.layout[data-theme="dark"] .file-browser-error {
+  color: #ffb4ad;
 }
 
 .layout[data-theme="dark"] .session-item:hover,

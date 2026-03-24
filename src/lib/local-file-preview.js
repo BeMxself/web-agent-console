@@ -1,5 +1,5 @@
-import { basename, extname, isAbsolute } from 'node:path';
-import { readFile, stat } from 'node:fs/promises';
+import { basename, dirname, extname, isAbsolute, join } from 'node:path';
+import { readFile, readdir, stat } from 'node:fs/promises';
 
 const TEXT_MIME_TYPES = new Set([
   'application/json',
@@ -57,7 +57,7 @@ const TEXT_EXTENSIONS = new Set([
 const TEXT_BASENAMES = new Set(['AGENTS.md', 'Dockerfile', 'Gemfile', 'LICENSE', 'Makefile', 'README', 'README.md']);
 
 export async function readLocalFilePreview(filePath) {
-  const normalizedPath = assertAbsoluteFilePath(filePath);
+  const normalizedPath = assertAbsoluteLocalPath(filePath);
   const fileInfo = await getLocalFileInfo(normalizedPath);
 
   if (fileInfo.kind === 'text') {
@@ -94,12 +94,74 @@ export async function readLocalFilePreview(filePath) {
 }
 
 export async function readLocalFileContent(filePath) {
-  const normalizedPath = assertAbsoluteFilePath(filePath);
+  const normalizedPath = assertAbsoluteLocalPath(filePath);
   const fileInfo = await getLocalFileInfo(normalizedPath);
   return {
     ...fileInfo,
     path: normalizedPath,
     content: await readFile(normalizedPath),
+  };
+}
+
+export async function readLocalDirectory(dirPath) {
+  const normalizedPath = assertAbsoluteLocalPath(dirPath);
+  const directoryStats = await statExistingLocalPath(normalizedPath);
+  if (!directoryStats.isDirectory()) {
+    const error = new Error('Only directories can be listed');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const directoryEntries = await readdir(normalizedPath, { withFileTypes: true });
+  const entries = (
+    await Promise.all(
+      directoryEntries.map(async (entry) => {
+        const entryPath = join(normalizedPath, entry.name);
+        if (entry.isDirectory()) {
+          return {
+            kind: 'directory',
+            name: entry.name,
+            path: entryPath,
+          };
+        }
+
+        if (entry.isFile()) {
+          return buildLocalDirectoryFileEntry(entry.name, entryPath);
+        }
+
+        const entryStats = await stat(entryPath).catch(() => null);
+        if (entryStats?.isDirectory()) {
+          return {
+            kind: 'directory',
+            name: entry.name,
+            path: entryPath,
+          };
+        }
+
+        if (entryStats?.isFile()) {
+          return buildLocalDirectoryFileEntry(entry.name, entryPath);
+        }
+
+        return null;
+      }),
+    )
+  )
+    .filter(Boolean)
+    .sort((left, right) => {
+      if (left.kind !== right.kind) {
+        return left.kind === 'directory' ? -1 : 1;
+      }
+
+      return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+  const parentPath = dirname(normalizedPath);
+  return {
+    kind: 'directory',
+    name: basename(normalizedPath) || normalizedPath,
+    path: normalizedPath,
+    parentPath: parentPath === normalizedPath ? null : parentPath,
+    entries,
   };
 }
 
@@ -116,8 +178,8 @@ function sanitizeDownloadName(name) {
   return String(name ?? 'download').replaceAll('"', '');
 }
 
-function assertAbsoluteFilePath(filePath) {
-  const normalizedPath = String(filePath ?? '').trim();
+function assertAbsoluteLocalPath(path) {
+  const normalizedPath = String(path ?? '').trim();
   if (!normalizedPath || !isAbsolute(normalizedPath)) {
     const error = new Error('Only absolute local file paths are supported');
     error.statusCode = 400;
@@ -128,15 +190,7 @@ function assertAbsoluteFilePath(filePath) {
 }
 
 async function getLocalFileInfo(filePath) {
-  const fileStats = await stat(filePath).catch((error) => {
-    if (error?.code === 'ENOENT') {
-      const notFoundError = new Error('Local file not found');
-      notFoundError.statusCode = 404;
-      throw notFoundError;
-    }
-
-    throw error;
-  });
+  const fileStats = await statExistingLocalPath(filePath);
 
   if (!fileStats.isFile()) {
     const error = new Error('Only regular files can be previewed');
@@ -150,6 +204,29 @@ async function getLocalFileInfo(filePath) {
     name,
     mimeType,
     kind: isImageMimeType(mimeType) ? 'image' : isTextLikeFile(filePath, mimeType) ? 'text' : 'download',
+  };
+}
+
+async function statExistingLocalPath(path) {
+  return stat(path).catch((error) => {
+    if (error?.code === 'ENOENT') {
+      const notFoundError = new Error('Local file not found');
+      notFoundError.statusCode = 404;
+      throw notFoundError;
+    }
+
+    throw error;
+  });
+}
+
+function buildLocalDirectoryFileEntry(name, path) {
+  const mimeType = inferMimeType(path);
+  return {
+    kind: 'file',
+    name,
+    path,
+    mimeType,
+    previewKind: isImageMimeType(mimeType) ? 'image' : isTextLikeFile(path, mimeType) ? 'text' : 'download',
   };
 }
 

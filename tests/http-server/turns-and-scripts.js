@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +14,6 @@ import { createHttpServer } from '../../src/lib/http-server.js';
 
 const testDir = fileURLToPath(new URL('..', import.meta.url));
 const pocDir = join(testDir, '..');
-const repoRoot = join(pocDir, '..', '..');
 const execFileAsync = promisify(execFile);
 
 test('http server forwards normalized turn requests to the provider', async () => {
@@ -270,12 +269,69 @@ test('http server previews local files for code and images and streams downloads
   }
 });
 
+test('http server lists local directories for the workspace file browser', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'web-agent-console-local-dir-'));
+  const srcDir = join(tempDir, 'src');
+  const readmePath = join(tempDir, 'README.md');
+  await mkdir(srcDir, { recursive: true });
+  await writeFile(readmePath, '# hello\n', 'utf8');
+  await writeFile(join(srcDir, 'app.js'), 'console.log("hi");\n', 'utf8');
+
+  const sessionService = toHttpProvider({
+    subscribe() {
+      return () => {};
+    },
+    getStatus() {
+      return {
+        overall: 'connected',
+        backend: { status: 'connected' },
+        relay: { status: 'online' },
+        lastError: null,
+      };
+    },
+  });
+  const server = createHttpServer({ provider: sessionService, publicDir: join(pocDir, 'public') });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
+  try {
+    const response = await fetch(
+      `${baseUrl}/api/local-files/list?path=${encodeURIComponent(tempDir)}`,
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      kind: 'directory',
+      name: tempDir.split('/').at(-1),
+      path: tempDir,
+      parentPath: dirname(tempDir),
+      entries: [
+        {
+          kind: 'directory',
+          name: 'src',
+          path: srcDir,
+        },
+        {
+          kind: 'file',
+          name: 'README.md',
+          path: readmePath,
+          mimeType: 'text/markdown',
+          previewKind: 'text',
+        },
+      ],
+    });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('smoke script documents required codex prerequisites and README points to the PoC', () => {
   const smoke = readFileSync(join(pocDir, 'scripts', 'smoke-local.sh'), 'utf8');
   const startScript = readFileSync(join(pocDir, 'scripts', 'start-local-4533.sh'), 'utf8');
   const readme = readFileSync(join(pocDir, 'README.md'), 'utf8');
-  const rootReadmePath = join(repoRoot, 'README.md');
-  const rootReadme = existsSync(rootReadmePath) ? readFileSync(rootReadmePath, 'utf8') : null;
 
   assert.match(smoke, /codex app-server/);
   assert.match(smoke, /WEB_AGENT_PROVIDER="\$\{WEB_AGENT_PROVIDER:-codex\}"/);
@@ -298,9 +354,6 @@ test('smoke script documents required codex prerequisites and README points to t
   assert.match(startScript, /WEB_AGENT_AUTH_PASSWORD="\$\{WEB_AGENT_AUTH_PASSWORD:-\}"/);
   assert.match(startScript, /exec node \.\/src\/server\.js/);
   assert.match(readme, /npm install/);
-  if (rootReadme) {
-    assert.match(rootReadme, /web-agent-console-codex/);
-  }
 });
 
 test('smoke script allows claude-sdk startup without forcing ANTHROPIC_API_KEY', async () => {

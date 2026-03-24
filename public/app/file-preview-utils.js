@@ -101,6 +101,10 @@ export function buildLocalFilePreviewUrl(path) {
   return `/api/local-files/preview?path=${encodeURIComponent(String(path ?? ''))}`;
 }
 
+export function buildLocalFileListUrl(path) {
+  return `/api/local-files/list?path=${encodeURIComponent(String(path ?? ''))}`;
+}
+
 export function buildLocalFileContentUrl(path, { download = false } = {}) {
   const query = `path=${encodeURIComponent(String(path ?? ''))}`;
   return `/api/local-files/content?${query}${download ? '&download=1' : ''}`;

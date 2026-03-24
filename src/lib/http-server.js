@@ -4,6 +4,7 @@ import { extname, join } from 'node:path';
 import { createAuth } from './auth.js';
 import {
   createContentDisposition,
+  readLocalDirectory,
   readLocalFileContent,
   readLocalFilePreview,
 } from './local-file-preview.js';
@@ -174,6 +175,12 @@ export function createHttpServer({ provider, publicDir, config = {} }) {
 
       if (req.method === 'GET' && pathname === '/api/local-files/preview') {
         const data = await readLocalFilePreview(requestUrl.searchParams.get('path'));
+        writeJson(res, 200, data);
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/local-files/list') {
+        const data = await readLocalDirectory(requestUrl.searchParams.get('path'));
         writeJson(res, 200, data);
         return;
       }

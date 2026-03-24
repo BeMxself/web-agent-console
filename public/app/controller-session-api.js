@@ -10,6 +10,7 @@ import {
   focusRenameInput,
   isAuthenticatedAppState,
   isMobileViewport,
+  normalizeActivityPanelTab,
   normalizeTheme,
   openDialog,
   requestJson,
@@ -19,6 +20,7 @@ import {
 } from './dom-utils.js';
 import {
   buildAttachmentDownloadUrl,
+  buildLocalFileListUrl,
   buildLocalFilePreviewUrl,
   getDisplayName,
   isImageFile,
@@ -258,6 +260,9 @@ export function createSessionControllerApi(ctx) {
         return null;
       }
       await ctx.controller.loadSessionSettings(sessionId);
+      if (ctx.state.activityPanelTab === 'files') {
+        await ctx.controller.loadWorkspaceFileBrowser();
+      }
 
       scrollConversationToBottom(ctx.documentRef);
       return detail;
@@ -444,6 +449,81 @@ export function createSessionControllerApi(ctx) {
 
       ctx.applyAction({ type: 'activity_panel_toggled' });
       return ctx.state.activityPanelCollapsed;
+    },
+    async selectActivityPanelTab(tab) {
+      const normalizedTab = normalizeActivityPanelTab(tab);
+      ctx.applyAction({ type: 'activity_panel_tab_selected', payload: { tab: normalizedTab } });
+      if (normalizedTab === 'files') {
+        await ctx.controller.loadWorkspaceFileBrowser();
+      }
+      return ctx.state.activityPanelTab;
+    },
+    resolveWorkspaceFileBrowserRoot() {
+      const selectedSessionId = ctx.state.selectedSessionId;
+      if (!selectedSessionId) {
+        return null;
+      }
+
+      const detail = ctx.state.sessionDetailsById?.[selectedSessionId] ?? null;
+      const meta = findThreadMeta(ctx.state.projects ?? [], selectedSessionId);
+      const rootPath = String(detail?.cwd ?? meta?.cwd ?? '').trim();
+      return rootPath || null;
+    },
+    async loadWorkspaceFileBrowser(path = null) {
+      const rootPath = ctx.controller.resolveWorkspaceFileBrowserRoot();
+      if (!rootPath) {
+        return null;
+      }
+
+      const requestedPath = normalizeWorkspaceFileBrowserPath(path, rootPath);
+      ctx.applyAction({
+        type: 'file_browser_requested',
+        payload: { rootPath, path: requestedPath },
+      });
+
+      try {
+        const directory = await ctx.requestProtectedJson(buildLocalFileListUrl(requestedPath));
+        if (!directory) {
+          return null;
+        }
+
+        ctx.applyAction({
+          type: 'file_browser_loaded',
+          payload: { rootPath, directory },
+        });
+        return ctx.state.fileBrowser;
+      } catch (error) {
+        ctx.applyAction({
+          type: 'file_browser_load_failed',
+          payload: {
+            rootPath,
+            path: requestedPath,
+            error: error?.message ?? '无法加载工作区文件。',
+          },
+        });
+        return ctx.state.fileBrowser;
+      }
+    },
+    async openWorkspaceFileBrowserEntry(path, kind) {
+      const normalizedKind = String(kind ?? '').trim();
+      const normalizedPath = String(path ?? '').trim();
+      if (!normalizedPath) {
+        return null;
+      }
+
+      if (normalizedKind === 'directory') {
+        return ctx.controller.loadWorkspaceFileBrowser(normalizedPath);
+      }
+
+      return ctx.controller.openLocalFilePreview(normalizedPath);
+    },
+    async openWorkspaceFileBrowserParent(path = null) {
+      const normalizedPath = String(path ?? ctx.state.fileBrowser?.parentPath ?? '').trim();
+      if (!normalizedPath) {
+        return null;
+      }
+
+      return ctx.controller.loadWorkspaceFileBrowser(normalizedPath);
     },
     setPersistPanelPreference(enabled) {
       ctx.applyAction({ type: 'panel_preference_changed', payload: { enabled } });
@@ -721,4 +801,17 @@ export function createSessionControllerApi(ctx) {
       return null;
     },
   };
+}
+
+function normalizeWorkspaceFileBrowserPath(path, rootPath) {
+  const normalizedRootPath = String(rootPath ?? '').trim();
+  const normalizedPath = String(path ?? '').trim();
+  if (
+    normalizedPath &&
+    (normalizedPath === normalizedRootPath || normalizedPath.startsWith(`${normalizedRootPath}/`))
+  ) {
+    return normalizedPath;
+  }
+
+  return normalizedRootPath;
 }

@@ -1,4 +1,4 @@
-import { escapeHtml, isAuthenticatedAppState } from './dom-utils.js';
+import { escapeHtml, isAuthenticatedAppState, normalizeActivityPanelTab } from './dom-utils.js';
 import { findThreadMeta, getPendingSessionProject } from './project-utils.js';
 import { extractLatestTurnPlan } from './plan-utils.js';
 import {
@@ -16,6 +16,33 @@ import {
 import { renderParagraphList, renderTaskPlanStep } from './render-turn-items.js';
 
 export function renderActivityPanel(state) {
+  const activeTab = normalizeActivityPanelTab(state.activityPanelTab);
+  const body =
+    activeTab === 'files'
+      ? renderWorkspaceFileBrowserPanel(state)
+      : renderActivityStatusPanel(state);
+
+  return [
+    '<div class="activity-panel-shell">',
+    '<div class="activity-panel-tablist" role="tablist" aria-label="右侧栏视图">',
+    renderActivityPanelTab('activity', '活动', activeTab),
+    renderActivityPanelTab('files', '文件', activeTab),
+    '</div>',
+    `<div class="activity-panel-body">${body}</div>`,
+    '</div>',
+  ].join('');
+}
+
+export function renderActivityPanelTab(value, label, activeTab) {
+  const selected = value === activeTab;
+  return [
+    `<button class="activity-panel-tab${selected ? ' activity-panel-tab--selected' : ''}" type="button" role="tab" aria-selected="${String(selected)}" data-activity-panel-tab="${value}">`,
+    escapeHtml(label),
+    '</button>',
+  ].join('');
+}
+
+export function renderActivityStatusPanel(state) {
   const pendingProject = getPendingSessionProject(state);
   if (pendingProject) {
     return renderActivitySplitLayout({
@@ -46,6 +73,82 @@ export function renderActivityPanel(state) {
     ].join(''),
     tasksBody: renderTaskListPanel(selectedDetail),
   });
+}
+
+export function renderWorkspaceFileBrowserPanel(state) {
+  const session =
+    state.sessionDetailsById?.[state.selectedSessionId] ??
+    findThreadMeta(state.projects ?? [], state.selectedSessionId);
+  const cwd = String(session?.cwd ?? '').trim();
+
+  if (getPendingSessionProject(state)) {
+    return renderActivitySplitSection({
+      title: '工作区文件',
+      className: 'activity-split-section activity-split-section--files',
+      body: '<p class="activity-empty">发送第一条消息后，才能浏览当前工作区文件。</p>',
+    });
+  }
+
+  if (!state.selectedSessionId || !cwd) {
+    return renderActivitySplitSection({
+      title: '工作区文件',
+      className: 'activity-split-section activity-split-section--files',
+      body: '<p class="activity-empty">选择会话后，这里会显示当前工作区文件。</p>',
+    });
+  }
+
+  const fileBrowser = state.fileBrowser ?? {};
+  const rootPath = String(fileBrowser.rootPath ?? cwd).trim() || cwd;
+  const currentPath = String(fileBrowser.currentPath ?? rootPath).trim() || rootPath;
+  const showParentButton =
+    Boolean(fileBrowser.parentPath) && currentPath !== rootPath;
+
+  let body = '';
+  if (fileBrowser.loading) {
+    body = '<p class="activity-empty">正在加载工作区文件…</p>';
+  } else if (fileBrowser.error) {
+    body = `<p class="file-browser-error">${escapeHtml(fileBrowser.error)}</p>`;
+  } else if ((fileBrowser.entries ?? []).length) {
+    body = [
+      '<div class="file-browser-list" role="list">',
+      fileBrowser.entries.map((entry) => renderFileBrowserEntry(entry)).join(''),
+      '</div>',
+    ].join('');
+  } else {
+    body = '<p class="activity-empty">这个目录里还没有可显示的文件。</p>';
+  }
+
+  return renderActivitySplitSection({
+    title: '工作区文件',
+    className: 'activity-split-section activity-split-section--files',
+    body: [
+      '<div class="file-browser-meta">',
+      `<div class="file-browser-meta-label">根目录</div><div class="file-browser-meta-value">${escapeHtml(rootPath)}</div>`,
+      `<div class="file-browser-meta-label">当前目录</div><div class="file-browser-meta-value">${escapeHtml(currentPath)}</div>`,
+      '</div>',
+      showParentButton
+        ? `<button class="file-browser-parent" type="button" data-file-browser-parent-path="${escapeHtml(fileBrowser.parentPath)}">返回上级目录</button>`
+        : '',
+      body,
+    ]
+      .filter(Boolean)
+      .join(''),
+  });
+}
+
+export function renderFileBrowserEntry(entry) {
+  const kindLabel = entry.kind === 'directory' ? '目录' : '文件';
+  return [
+    '<div class="file-browser-list-item" role="listitem">',
+    `<button class="file-browser-entry file-browser-entry--${escapeHtml(entry.kind)}" type="button" data-file-browser-entry-path="${escapeHtml(entry.path)}" data-file-browser-entry-kind="${escapeHtml(entry.kind)}">`,
+    `<span class="file-browser-entry-kind">${escapeHtml(kindLabel)}</span>`,
+    `<span class="file-browser-entry-name">${escapeHtml(entry.name)}</span>`,
+    entry.kind === 'file' && entry.mimeType
+      ? `<span class="file-browser-entry-meta">${escapeHtml(entry.mimeType)}</span>`
+      : '',
+    '</button>',
+    '</div>',
+  ].join('');
 }
 
 export function renderActivityRealtime(realtime) {

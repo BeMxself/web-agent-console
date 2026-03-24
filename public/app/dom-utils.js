@@ -139,6 +139,10 @@ export function normalizeHistoryDialogTab(tab) {
   return tab === 'archived' ? 'archived' : 'active';
 }
 
+export function normalizeActivityPanelTab(tab) {
+  return tab === 'files' ? 'files' : 'activity';
+}
+
 export function normalizeMobileDrawerMode(mode) {
   return mode === 'activity' ? 'activity' : 'sessions';
 }

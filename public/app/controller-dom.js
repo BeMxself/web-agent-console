@@ -196,6 +196,37 @@ export function bindApprovalModeControlsActions(ctx, root) {
   }
 }
 
+export function bindActivityPanelActions(ctx, root) {
+  if (!root?.addEventListener) {
+    return;
+  }
+
+  root.addEventListener('click', (event) => {
+    const tabButton = event?.target?.closest?.('[data-activity-panel-tab]');
+    if (tabButton) {
+      event.preventDefault?.();
+      void ctx.controller.selectActivityPanelTab(tabButton.dataset.activityPanelTab);
+      return;
+    }
+
+    const parentButton = event?.target?.closest?.('[data-file-browser-parent-path]');
+    if (parentButton) {
+      event.preventDefault?.();
+      void ctx.controller.openWorkspaceFileBrowserParent(parentButton.dataset.fileBrowserParentPath);
+      return;
+    }
+
+    const entryButton = event?.target?.closest?.('[data-file-browser-entry-path]');
+    if (entryButton) {
+      event.preventDefault?.();
+      void ctx.controller.openWorkspaceFileBrowserEntry(
+        entryButton.dataset.fileBrowserEntryPath,
+        entryButton.dataset.fileBrowserEntryKind,
+      );
+    }
+  });
+}
+
 export function renderApp(ctx) {
   if (!ctx.documentRef) {
     return;
@@ -493,11 +524,13 @@ export function renderApp(ctx) {
         ctx.renderCache.activityPanel,
         [
           ctx.state.selectedSessionId,
+          ctx.state.activityPanelTab,
           ctx.state.turnStatusBySession,
           ctx.state.diffBySession,
           ctx.state.realtimeBySession,
           ctx.state.sessionDetailsById[ctx.state.selectedSessionId] ?? null,
           ctx.state.pendingSessionProjectId,
+          ctx.state.fileBrowser,
         ],
         () => renderActivityPanel(ctx.state),
       );
@@ -618,6 +651,7 @@ export function bindControllerDocumentEvents(ctx) {
     const composerImageInput = ctx.documentRef.querySelector('#composer-image-input');
     const interruptButton = ctx.documentRef.querySelector('#interrupt-button');
     const conversationBody = ctx.documentRef.querySelector('#conversation-body');
+    const activityPanel = ctx.documentRef.querySelector('#activity-panel');
     const historyDialog = ctx.documentRef.querySelector('#history-dialog');
     const filePreviewDialog = ctx.documentRef.querySelector('#file-preview-dialog');
     const mobileDrawer = ctx.documentRef.querySelector('#mobile-drawer');
@@ -720,6 +754,9 @@ export function bindControllerDocumentEvents(ctx) {
     activityPanelToggle?.addEventListener('click', () => {
       ctx.controller.toggleActivityPanel();
     });
+
+    bindActivityPanelActions(ctx, activityPanel);
+    bindActivityPanelActions(ctx, mobileDrawer);
 
     conversationNavToggle?.addEventListener('change', () => {
       ctx.controller.setConversationNavVisible(Boolean(conversationNavToggle.checked));

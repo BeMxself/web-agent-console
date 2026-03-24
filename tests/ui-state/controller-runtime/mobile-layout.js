@@ -397,6 +397,174 @@ test('browser app renders split activity and task sections in the right sidebar'
   assert.match(fakeDocument.activityPanel.innerHTML, /进行中/);
 });
 
+test('browser app switches the right sidebar to workspace files and opens file previews from the browser', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread', cwd: '/tmp/workspace-a' }],
+              historySessions: {
+                active: [],
+                archived: [],
+              },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=%2Ftmp%2Fworkspace-a') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'workspace-a',
+          path: '/tmp/workspace-a',
+          parentPath: '/tmp',
+          entries: [
+            { kind: 'directory', name: 'src', path: '/tmp/workspace-a/src' },
+            {
+              kind: 'file',
+              name: 'README.md',
+              path: '/tmp/workspace-a/README.md',
+              mimeType: 'text/markdown',
+              previewKind: 'text',
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/local-files/list?path=%2Ftmp%2Fworkspace-a%2Fsrc') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'src',
+          path: '/tmp/workspace-a/src',
+          parentPath: '/tmp/workspace-a',
+          entries: [
+            {
+              kind: 'file',
+              name: 'app.js',
+              path: '/tmp/workspace-a/src/app.js',
+              mimeType: 'text/javascript',
+              previewKind: 'text',
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/local-files/preview?path=%2Ftmp%2Fworkspace-a%2Fsrc%2Fapp.js') {
+        return jsonResponse({
+          kind: 'text',
+          name: 'app.js',
+          path: '/tmp/workspace-a/src/app.js',
+          mimeType: 'text/javascript',
+          content: 'export const app = true;\nconsole.log(app);\n',
+          lineCount: 2,
+          downloadUrl:
+            '/api/local-files/content?path=%2Ftmp%2Fworkspace-a%2Fsrc%2Fapp.js&download=1',
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  app.toggleActivityPanel();
+
+  fakeDocument.activityPanel.dispatchEvent({
+    type: 'click',
+    target: {
+      closest(selector) {
+        if (selector === '[data-activity-panel-tab]') {
+          return {
+            dataset: {
+              activityPanelTab: 'files',
+            },
+          };
+        }
+        return null;
+      },
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.match(fakeDocument.activityPanel.innerHTML, /工作区文件/);
+  assert.match(fakeDocument.activityPanel.innerHTML, /README\.md/);
+  assert.match(fakeDocument.activityPanel.innerHTML, /src/);
+
+  fakeDocument.activityPanel.dispatchEvent({
+    type: 'click',
+    target: {
+      closest(selector) {
+        if (selector === '[data-file-browser-entry-path]') {
+          return {
+            dataset: {
+              fileBrowserEntryKind: 'directory',
+              fileBrowserEntryPath: '/tmp/workspace-a/src',
+            },
+          };
+        }
+        return null;
+      },
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.match(fakeDocument.activityPanel.innerHTML, /当前目录/);
+  assert.match(fakeDocument.activityPanel.innerHTML, /app\.js/);
+
+  fakeDocument.activityPanel.dispatchEvent({
+    type: 'click',
+    target: {
+      closest(selector) {
+        if (selector === '[data-file-browser-entry-path]') {
+          return {
+            dataset: {
+              fileBrowserEntryKind: 'file',
+              fileBrowserEntryPath: '/tmp/workspace-a/src/app.js',
+            },
+          };
+        }
+        return null;
+      },
+    },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(fakeDocument.filePreviewDialog.open, true);
+  assert.match(fakeDocument.filePreviewDialog.innerHTML, /app\.js/);
+  assert.match(fakeDocument.filePreviewDialog.innerHTML, /data-file-preview-line-number="1"/);
+});
+
 test('browser app shows backend status when session loading fails', async () => {
   const fakeDocument = createFakeDocument();
   const app = createAppController({
