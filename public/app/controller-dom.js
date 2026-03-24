@@ -20,6 +20,7 @@ import {
 import { getSelectedSessionSettings } from './session-utils.js';
 import {
   renderActivityPanel,
+  getComposerSettingsScopeId,
   resolveComposerPrimaryAction,
   syncComposerAttachmentActions,
   syncComposerAttachmentError,
@@ -44,76 +45,159 @@ import {
   syncPanelToggleButton,
   syncTheme,
 } from './render-shell.js';
+import { renderApprovalModeControls } from './render-settings.js';
 import { renderHistoryDialogContent } from './render-projects.js';
 import { renderConversationNavigation } from './render-turn-items.js';
 
 export function bindProjectSidebarActions(ctx, root) {
-    if (!root?.querySelectorAll) {
-      return;
-    }
-
-    for (const button of root.querySelectorAll('[data-session-id]')) {
-      button.addEventListener('click', () => {
-        void ctx.controller.selectSession(button.dataset.sessionId);
-      });
-    }
-
-    for (const button of root.querySelectorAll('[data-project-dialog-open]')) {
-      button.addEventListener('click', () => {
-        ctx.controller.openProjectDialog();
-      });
-    }
-
-    for (const button of root.querySelectorAll('[data-project-collapse]')) {
-      button.addEventListener('click', () => {
-        void ctx.controller.toggleProjectCollapsed(button.dataset.projectCollapse);
-      });
-    }
-
-    for (const button of root.querySelectorAll('[data-project-close]')) {
-      button.addEventListener('click', () => {
-        void ctx.controller.closeProject(button.dataset.projectClose);
-      });
-    }
-
-    for (const button of root.querySelectorAll('[data-project-session-start]')) {
-      button.addEventListener('click', () => {
-        void ctx.controller.startSessionInProject(button.dataset.projectSessionStart);
-      });
-    }
-
-    for (const button of root.querySelectorAll('[data-project-history-open]')) {
-      button.addEventListener('click', () => {
-        ctx.controller.openHistoryDialog(button.dataset.projectHistoryOpen);
-      });
-    }
-
-    for (const button of root.querySelectorAll('[data-focused-remove]')) {
-      button.addEventListener('click', () => {
-        void ctx.controller.removeFocusedSession(
-          button.dataset.projectId,
-          button.dataset.focusedRemove,
-        );
-      });
-    }
-
-    for (const button of root.querySelectorAll('[data-logout-button]')) {
-      button.addEventListener('click', () => {
-        void ctx.controller.logout();
-      });
-    }
-
-    for (const button of root.querySelectorAll('[data-theme-toggle]')) {
-      button.addEventListener('click', () => {
-        ctx.controller.toggleTheme(button.dataset.themeNextTheme);
-      });
-    }
+  if (!root?.querySelectorAll) {
+    return;
   }
 
-  export function renderApp(ctx) {
-    if (!ctx.documentRef) {
-      return;
-    }
+  for (const button of root.querySelectorAll('[data-session-id]')) {
+    button.addEventListener('click', () => {
+      void ctx.controller.selectSession(button.dataset.sessionId);
+    });
+  }
+
+  for (const button of root.querySelectorAll('[data-project-dialog-open]')) {
+    button.addEventListener('click', () => {
+      ctx.controller.openProjectDialog();
+    });
+  }
+
+  for (const button of root.querySelectorAll('[data-project-collapse]')) {
+    button.addEventListener('click', () => {
+      void ctx.controller.toggleProjectCollapsed(button.dataset.projectCollapse);
+    });
+  }
+
+  for (const button of root.querySelectorAll('[data-project-close]')) {
+    button.addEventListener('click', () => {
+      void ctx.controller.closeProject(button.dataset.projectClose);
+    });
+  }
+
+  for (const button of root.querySelectorAll('[data-project-session-start]')) {
+    button.addEventListener('click', () => {
+      void ctx.controller.startSessionInProject(button.dataset.projectSessionStart);
+    });
+  }
+
+  for (const button of root.querySelectorAll('[data-project-history-open]')) {
+    button.addEventListener('click', () => {
+      ctx.controller.openHistoryDialog(button.dataset.projectHistoryOpen);
+    });
+  }
+
+  for (const button of root.querySelectorAll('[data-focused-remove]')) {
+    button.addEventListener('click', () => {
+      void ctx.controller.removeFocusedSession(
+        button.dataset.projectId,
+        button.dataset.focusedRemove,
+      );
+    });
+  }
+
+  for (const button of root.querySelectorAll('[data-logout-button]')) {
+    button.addEventListener('click', () => {
+      void ctx.controller.logout();
+    });
+  }
+
+  for (const button of root.querySelectorAll('[data-theme-toggle]')) {
+    button.addEventListener('click', () => {
+      ctx.controller.toggleTheme(button.dataset.themeNextTheme);
+    });
+  }
+}
+
+export function bindApprovalModeControlsActions(ctx, root) {
+  if (!root?.querySelectorAll) {
+    return;
+  }
+
+  for (const button of root.querySelectorAll('[data-composer-settings-toggle]')) {
+    button.addEventListener('click', () => {
+      ctx.controller.toggleComposerSettings(button.dataset.composerSettingsScope);
+    });
+  }
+
+  const select = root.querySelector('[data-approval-mode-select]');
+  if (select) {
+    select.addEventListener('change', () => {
+      if (select.disabled) {
+        return;
+      }
+      void ctx.controller.setApprovalMode(select.value);
+    });
+  }
+
+  const modelSelect = root.querySelector('[data-session-model-select]');
+  if (modelSelect) {
+    modelSelect.addEventListener('change', () => {
+      if (modelSelect.disabled) {
+        return;
+      }
+
+      const currentSettings = getSelectedSessionSettings(ctx.state);
+      void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
+        ...currentSettings,
+        model: modelSelect.value || null,
+      });
+    });
+  }
+
+  const reasoningSelect = root.querySelector('[data-session-reasoning-select]');
+  if (reasoningSelect) {
+    reasoningSelect.addEventListener('change', () => {
+      if (reasoningSelect.disabled) {
+        return;
+      }
+
+      const currentSettings = getSelectedSessionSettings(ctx.state);
+      void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
+        ...currentSettings,
+        reasoningEffort: reasoningSelect.value || null,
+      });
+    });
+  }
+
+  const agentSelect = root.querySelector('[data-session-agent-select]');
+  if (agentSelect) {
+    agentSelect.addEventListener('change', () => {
+      if (agentSelect.disabled) {
+        return;
+      }
+
+      const currentSettings = getSelectedSessionSettings(ctx.state);
+      void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
+        ...currentSettings,
+        agentType: agentSelect.value || null,
+      });
+    });
+  }
+
+  const sandboxSelect = root.querySelector('[data-session-sandbox-select]');
+  if (sandboxSelect) {
+    sandboxSelect.addEventListener('change', () => {
+      if (sandboxSelect.disabled) {
+        return;
+      }
+
+      const currentSettings = getSelectedSessionSettings(ctx.state);
+      void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
+        ...currentSettings,
+        sandboxMode: sandboxSelect.value || null,
+      });
+    });
+  }
+}
+
+export function renderApp(ctx) {
+  if (!ctx.documentRef) {
+    return;
+  }
 
     const appLayout = ctx.documentRef.querySelector('#app-layout');
     const authGate = ctx.documentRef.querySelector('#auth-gate');
@@ -212,13 +296,36 @@ export function bindProjectSidebarActions(ctx, root) {
       ctx.state,
     );
     syncAuthGate(authGate, loginError, loginButton, loginPassword, logoutButton, ctx.state.auth);
-    syncApprovalModeControls(
+    const composerSettingsScopeId = getComposerSettingsScopeId(ctx.state);
+    const approvalControlsMarkup = getCachedMarkup(
+      ctx.renderCache.approvalModeControls,
+      [
+        authLocked,
+        mobileViewport,
+        ctx.state.selectedSessionId,
+        ctx.state.approvalMode,
+        ctx.state.sessionOptions,
+        ctx.state.sessionSettingsById[ctx.state.selectedSessionId] ?? null,
+        ctx.state.turnStatusBySession[ctx.state.selectedSessionId] ?? null,
+        ctx.state.realtimeBySession[ctx.state.selectedSessionId] ?? null,
+        ctx.state.composerSettingsCollapsedByScope[composerSettingsScopeId] ?? null,
+        ctx.approvalModeRequestInFlight,
+        ctx.approvalUiError,
+        ctx.sessionSettingsRequestInFlight,
+        ctx.sessionSettingsPendingThreadId,
+        ctx.sessionSettingsUiError,
+      ],
+      () => renderApprovalModeControls(
+        ctx.state,
+        approvalUiState,
+        sessionSettingsUiState,
+        { mobileViewport },
+      ),
+    );
+    const approvalControlsChanged = syncApprovalModeControls(
       approvalModeControls,
-      ctx.state,
+      approvalControlsMarkup.html,
       authLocked,
-      approvalUiState,
-      sessionSettingsUiState,
-      mobileViewport,
     );
 
     if (projectPanelToggle) {
@@ -249,12 +356,8 @@ export function bindProjectSidebarActions(ctx, root) {
       }
     }
 
-    if (approvalModeControls) {
-      for (const button of approvalModeControls.querySelectorAll('[data-composer-settings-toggle]')) {
-        button.addEventListener('click', () => {
-          ctx.controller.toggleComposerSettings(button.dataset.composerSettingsScope);
-        });
-      }
+    if (approvalModeControls && approvalControlsChanged) {
+      bindApprovalModeControlsActions(ctx, approvalModeControls);
     }
 
     if (conversationScroll) {
@@ -353,78 +456,6 @@ export function bindProjectSidebarActions(ctx, root) {
             void ctx.controller.resolvePendingAction(pendingActionId, { response });
           });
         }
-      }
-    }
-
-    if (approvalModeControls) {
-      const select = approvalModeControls.querySelector('[data-approval-mode-select]');
-      if (select) {
-        select.addEventListener('change', () => {
-          if (select.disabled) {
-            return;
-          }
-          void ctx.controller.setApprovalMode(select.value);
-        });
-      }
-
-      const modelSelect = approvalModeControls.querySelector('[data-session-model-select]');
-      if (modelSelect) {
-        modelSelect.addEventListener('change', () => {
-          if (modelSelect.disabled) {
-            return;
-          }
-
-          const currentSettings = getSelectedSessionSettings(ctx.state);
-          void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
-            ...currentSettings,
-            model: modelSelect.value || null,
-          });
-        });
-      }
-
-      const reasoningSelect = approvalModeControls.querySelector('[data-session-reasoning-select]');
-      if (reasoningSelect) {
-        reasoningSelect.addEventListener('change', () => {
-          if (reasoningSelect.disabled) {
-            return;
-          }
-
-          const currentSettings = getSelectedSessionSettings(ctx.state);
-          void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
-            ...currentSettings,
-            reasoningEffort: reasoningSelect.value || null,
-          });
-        });
-      }
-
-      const agentSelect = approvalModeControls.querySelector('[data-session-agent-select]');
-      if (agentSelect) {
-        agentSelect.addEventListener('change', () => {
-          if (agentSelect.disabled) {
-            return;
-          }
-
-          const currentSettings = getSelectedSessionSettings(ctx.state);
-          void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
-            ...currentSettings,
-            agentType: agentSelect.value || null,
-          });
-        });
-      }
-
-      const sandboxSelect = approvalModeControls.querySelector('[data-session-sandbox-select]');
-      if (sandboxSelect) {
-        sandboxSelect.addEventListener('change', () => {
-          if (sandboxSelect.disabled) {
-            return;
-          }
-
-          const currentSettings = getSelectedSessionSettings(ctx.state);
-          void ctx.controller.setSessionSettings(ctx.state.selectedSessionId, {
-            ...currentSettings,
-            sandboxMode: sandboxSelect.value || null,
-          });
-        });
       }
     }
 
@@ -633,7 +664,6 @@ export function bindControllerDocumentEvents(ctx) {
     interruptButton?.addEventListener('click', () => {
       void ctx.controller.interruptTurn();
     });
-
     projectPanelToggle?.addEventListener('click', () => {
       ctx.controller.toggleProjectPanel();
     });
@@ -665,7 +695,6 @@ export function bindControllerDocumentEvents(ctx) {
         ctx.controller.closeHistoryDialog();
       }
     });
-
     renameDialog?.addEventListener?.('close', () => {
       if (ctx.pendingRenameSessionId) {
         ctx.controller.closeRenameDialog();

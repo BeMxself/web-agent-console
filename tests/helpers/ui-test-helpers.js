@@ -39,18 +39,12 @@ export function assertTaskSummaryItem(html, group, text) {
   );
 }
 
-export function assertComposerSetting(html, key, label, value) {
+export function assertComposerSetting(html, key, label) {
   const normalizedHtml = String(html ?? '');
   assert.match(
     normalizedHtml,
     new RegExp(
       `data-composer-setting-label="${escapeRegExp(key)}"[\\s\\S]*?>${escapeRegExp(label)}<`,
-    ),
-  );
-  assert.match(
-    normalizedHtml,
-    new RegExp(
-      `data-composer-setting-value="${escapeRegExp(key)}"[\\s\\S]*?>${escapeRegExp(value)}<`,
     ),
   );
 }

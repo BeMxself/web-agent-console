@@ -50,6 +50,22 @@ export function renderApprovalModeControls(
     .join('');
 
   const settingDescriptors = [
+    ...(sessionOptions.agentTypeOptions.length
+      ? [
+          {
+            kind: 'select',
+            settingKey: 'agent',
+            label: 'Agent 类型',
+            ariaLabel: 'Agent 类型',
+            dataAttribute: 'data-session-agent-select',
+            options: sessionOptions.agentTypeOptions,
+            value: agentType,
+            disabled: sessionSettingsDisabled,
+            pending: sessionSettingsPending,
+            valueLabel: agentTypeValueLabel,
+          },
+        ]
+      : []),
     {
       kind: 'select',
       settingKey: 'model',
@@ -77,28 +93,12 @@ export function renderApprovalModeControls(
         selectedSettings.reasoningEffort,
       ),
     },
-    ...(sessionOptions.agentTypeOptions.length
-      ? [
-          {
-            kind: 'select',
-            settingKey: 'agent',
-            label: 'Agent 类型',
-            ariaLabel: 'Agent 类型',
-            dataAttribute: 'data-session-agent-select',
-            options: sessionOptions.agentTypeOptions,
-            value: agentType,
-            disabled: sessionSettingsDisabled,
-            pending: sessionSettingsPending,
-            valueLabel: agentTypeValueLabel,
-          },
-        ]
-      : []),
     sessionOptions.sandboxModeOptions.length
       ? {
           kind: 'select',
           settingKey: 'sandbox',
-          label: '沙箱隔离类型',
-          ariaLabel: '沙箱隔离类型',
+          label: '沙箱类型',
+          ariaLabel: '沙箱类型',
           dataAttribute: 'data-session-sandbox-select',
           options: sessionOptions.sandboxModeOptions,
           value: sandboxMode,
@@ -109,7 +109,7 @@ export function renderApprovalModeControls(
       : {
           kind: 'readonly',
           settingKey: 'sandbox',
-          label: '沙箱隔离类型',
+          label: '沙箱类型',
           value: sandboxValueLabel,
         },
     {
@@ -217,15 +217,11 @@ export function renderSettingsSelectControl({
   value,
   disabled = false,
   pending = false,
-  valueLabel = '默认',
 }) {
   const normalizedValue = String(value ?? '');
   return [
     `<div class="composer-settings-item composer-settings-item--editable" data-composer-setting="${escapeHtml(settingKey)}">`,
-    '<div class="composer-settings-item-copy">',
     `<span class="composer-settings-item-label" data-composer-setting-label="${escapeHtml(settingKey)}">${escapeHtml(label)}</span>`,
-    `<span class="composer-settings-item-value" data-composer-setting-value="${escapeHtml(settingKey)}">${escapeHtml(valueLabel || '默认')}</span>`,
-    '</div>',
     `<label class="composer-settings-select-wrap${pending ? ' composer-settings-select-wrap--pending' : ''}">`,
     `<span class="sr-only">${escapeHtml(ariaLabel)}</span>`,
     `<select class="composer-settings-select approval-mode-select" ${dataAttribute}="true" aria-label="${escapeHtml(ariaLabel)}"${disabled ? ' disabled' : ''}>`,

@@ -10,6 +10,7 @@ import {
   createClipboardImageItem,
   assertTaskSummaryItem,
   assertComposerSetting,
+  trackInnerHtmlWrites,
   jsonResponse,
   jsonErrorResponse,
 } from '../shared.js';
@@ -654,28 +655,36 @@ test('browser app renders compact settings metadata, collapses the mobile settin
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="agent"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="sandbox"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary-icon="approval"/);
-
-  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'model', '模型', 'gpt-5.4');
-  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'reasoning', '推理强度', '高');
-  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'agent', 'Agent 类型', '计划');
-  assertComposerSetting(
+  assert.match(
     fakeDocument.approvalModeControls.innerHTML,
-    'sandbox',
-    '沙箱隔离类型',
-    '工作区可写',
+    /data-composer-settings-summary-item="agent"[\s\S]*data-composer-settings-summary-item="model"[\s\S]*data-composer-settings-summary-item="reasoning"[\s\S]*data-composer-settings-summary-item="sandbox"[\s\S]*data-composer-settings-summary-item="approval"/,
   );
-  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'approval', '审批模式', '手动审批');
+
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'model', '模型');
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'reasoning', '推理强度');
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'agent', 'Agent 类型');
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'sandbox', '沙箱类型');
+  assertComposerSetting(fakeDocument.approvalModeControls.innerHTML, 'approval', '审批模式');
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /工作区可写/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-composer-setting-value="model"/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-composer-setting-value="reasoning"/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-composer-setting-value="agent"/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-composer-setting-value="sandbox"/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-composer-setting-value="approval"/);
   assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /title="模型"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="模型：gpt-5\.4"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="Agent 类型：计划"/);
-  assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="沙箱隔离类型：工作区可写"/);
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /aria-label="沙箱类型：工作区可写"/);
 
   app.toggleComposerSettings();
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-collapsed="false"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-confirm="true"/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, />确认<\/button>/);
+  assert.match(
+    fakeDocument.approvalModeControls.innerHTML,
+    /data-composer-setting="agent"[\s\S]*data-composer-setting="model"[\s\S]*data-composer-setting="reasoning"[\s\S]*data-composer-setting="sandbox"[\s\S]*data-composer-setting="approval"/,
+  );
 
   await app.selectSession('thread-2');
 
@@ -685,4 +694,127 @@ test('browser app renders compact settings metadata, collapses the mobile settin
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-agent-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"[^>]*disabled/);
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-approval-mode-select="true"[^>]*disabled/);
+});
+
+test('browser app keeps the compact settings strip stable during unrelated composer and status updates', async () => {
+  const fakeDocument = createFakeDocument({ mobile: true });
+  const settingsWrites = trackInnerHtmlWrites(fakeDocument.approvalModeControls);
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-1',
+                  name: 'Idle thread',
+                  runtime: {
+                    turnStatus: 'idle',
+                    activeTurnId: null,
+                    diff: null,
+                    realtime: { status: 'idle', sessionId: null, items: [] },
+                  },
+                },
+              ],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          modelOptions: [
+            { value: '', label: '默认' },
+            { value: 'gpt-5.4', label: 'gpt-5.4' },
+          ],
+          reasoningEffortOptions: [
+            { value: '', label: '默认' },
+            { value: 'high', label: '高' },
+          ],
+          agentTypeOptions: [
+            { value: 'default', label: '执行' },
+            { value: 'plan', label: '计划' },
+          ],
+          sandboxModeOptions: [
+            { value: 'read-only', label: '只读' },
+            { value: 'workspace-write', label: '工作区可写' },
+            { value: 'danger-full-access', label: '完全访问' },
+          ],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: 'default',
+            sandboxMode: 'danger-full-access',
+          },
+          runtimeContext: {
+            sandboxMode: 'workspace-write',
+          },
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: 'gpt-5.4',
+          reasoningEffort: 'high',
+          agentType: 'plan',
+          sandboxMode: 'workspace-write',
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Idle thread',
+            cwd: '/tmp/workspace-a',
+            runtime: {
+              turnStatus: 'idle',
+              activeTurnId: null,
+              diff: null,
+              realtime: { status: 'idle', sessionId: null, items: [] },
+            },
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadApprovalMode();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  const initialSettingsWrites = settingsWrites.count;
+  assert.match(fakeDocument.approvalModeControls.innerHTML, /data-composer-settings-summary="true"/);
+
+  app.setComposerDraft('keep the settings strip steady');
+  assert.equal(settingsWrites.count, initialSettingsWrites);
+
+  await app.loadStatus();
+  assert.equal(settingsWrites.count, initialSettingsWrites);
 });

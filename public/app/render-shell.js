@@ -36,8 +36,6 @@ import {
   renderThreadSubagents,
 } from './render-thread-panels.js';
 import { renderTurn } from './render-turn-items.js';
-import { renderApprovalModeControls } from './render-settings.js';
-
 export function renderProjectSidebar(state) {
   const header = renderProjectSidebarHeader(state.projects.length > 0, state.systemStatus);
   const footer = renderProjectSidebarFooter(state);
@@ -545,20 +543,20 @@ export function syncConversationNavToggle(toggle, checked) {
 
 export function syncApprovalModeControls(
   node,
-  state,
-  authLocked,
-  approvalUiState = null,
-  sessionSettingsUiState = null,
-  mobileViewport = false,
+  markup,
+  authLocked = false,
 ) {
   if (!node) {
-    return;
+    return false;
   }
 
-  node.innerHTML = authLocked
-    ? ''
-    : renderApprovalModeControls(state, approvalUiState, sessionSettingsUiState, { mobileViewport });
+  const nextMarkup = authLocked ? '' : String(markup ?? '');
+  const changed = node.innerHTML !== nextMarkup;
+  if (changed) {
+    node.innerHTML = nextMarkup;
+  }
   node.hidden = authLocked;
+  return changed;
 }
 
 export function syncAuthGate(authGate, loginError, loginButton, loginPassword, logoutButton, authState) {

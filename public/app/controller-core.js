@@ -54,6 +54,7 @@ export function createAppController({
       sessionList: createMarkupCache(),
       conversationBody: createMarkupCache(),
       activityPanel: createMarkupCache(),
+      approvalModeControls: createMarkupCache(),
     },
   };
 
