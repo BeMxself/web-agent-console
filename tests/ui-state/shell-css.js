@@ -366,6 +366,19 @@ test('history dialog css keeps scrolling inside the history list instead of the 
   );
 });
 
+test('mobile history dialog css keeps a stable full-height viewport instead of collapsing', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.history-dialog-frame\s*\{[^}]*width:\s*calc\(100vw - 24px\);[^}]*height:\s*calc\(100dvh - 24px\);[^}]*max-height:\s*calc\(100dvh - 24px\);/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.history-dialog-shell\s*\{[^}]*height:\s*100%;[^}]*max-height:\s*100%;/s,
+  );
+});
+
 test('theme css adds a dark palette and transparent icon toggle affordance', () => {
   const css = readPublicFile('app.css');
 
