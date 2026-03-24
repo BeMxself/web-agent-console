@@ -248,6 +248,35 @@ test('mobile composer css collapses settings into a summary strip and keeps the 
   );
 });
 
+test('mobile drawer footer and attachment menu css stay visible above iOS chrome and keep the composer compact', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /\.mobile-drawer-shell\s*\{[^}]*min-height:\s*100dvh;[^}]*height:\s*100dvh;[^}]*padding:\s*max\(16px,\s*env\(safe-area-inset-top\)\)\s*14px\s*max\((4[4-9]|[5-9]\d)px,\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*(2[0-9]|3[0-9])px\)\);/s,
+  );
+  assert.match(
+    css,
+    /\.mobile-project-sidebar\s+\.sidebar-footer\s*\{[^}]*padding-bottom:\s*max\((1[6-9]|2[0-9])px,\s*calc\(env\(safe-area-inset-bottom\)\s*\+\s*(1[6-9]|2[0-9])px\)\);/s,
+  );
+  assert.match(
+    css,
+    /\.composer-action-row-start\s*\{[^}]*position:\s*relative;[^}]*display:\s*flex;[^}]*align-items:\s*center;/s,
+  );
+  assert.match(
+    css,
+    /\.composer-attachment-menu\s*\{[^}]*position:\s*absolute;[^}]*left:\s*0;[^}]*bottom:\s*calc\(100%\s*\+\s*8px\);[^}]*display:\s*grid;[^}]*gap:\s*8px;[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s,
+  );
+  assert.match(
+    css,
+    /\.composer-attachment-menu\s+button\s*\{[^}]*min-height:\s*(40|41|42|43|44)px;[^}]*border:\s*1px solid rgba\(17,\s*32,\s*49,\s*0\.08\);[^}]*background:\s*rgba\(255,\s*255,\s*255,\s*0\.98\)\s*!important;/s,
+  );
+  assert.match(
+    css,
+    /\.composer-attach-trigger\s*\{[^}]*width:\s*(40|41|42|43|44)px;[^}]*height:\s*(40|41|42|43|44)px;/s,
+  );
+});
+
 test('mobile conversation css keeps turn cards, plan steps, and message bubbles compact', () => {
   const css = readPublicFile('app.css');
 
@@ -411,6 +440,10 @@ test('theme css adds a dark palette and transparent icon toggle affordance', () 
   assert.match(
     css,
     /body\[data-theme="dark"\]\s+\.auth-theme-toggle\s*\{[^}]*color:\s*#dce7f2;/s,
+  );
+  assert.match(
+    css,
+    /\.layout\[data-theme="dark"\]\s+\.composer-attachment-menu\s+button\s*\{[^}]*background:\s*linear-gradient\(180deg,[^}]*\)\s*!important;[^}]*color:\s*#f5f9fd;/s,
   );
 });
 

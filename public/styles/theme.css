@@ -4,8 +4,8 @@
   }
 
   .composer-attach-trigger {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 12px !important;
     font-size: 20px;
   }
@@ -528,9 +528,21 @@ body[data-theme="dark"] .dialog-input:focus {
 }
 
 .layout[data-theme="dark"] .composer-attachment-menu {
-  border-color: rgba(159, 182, 203, 0.14);
-  background: rgba(15, 24, 34, 0.96);
-  box-shadow: 0 12px 24px rgba(2, 8, 16, 0.28);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.layout[data-theme="dark"] .composer-attachment-menu button {
+  border-color: rgba(159, 182, 203, 0.2);
+  background: linear-gradient(180deg, rgba(34, 52, 73, 0.98), rgba(18, 29, 42, 0.96)) !important;
+  color: #f5f9fd;
+  box-shadow: 0 14px 28px rgba(2, 8, 16, 0.36);
+}
+
+.layout[data-theme="dark"] #composer .composer-attachment-menu button {
+  border-color: rgba(159, 182, 203, 0.2) !important;
+  color: #f5f9fd !important;
 }
 
 .layout[data-theme="dark"] #composer .composer-attachment-remove {
