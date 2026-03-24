@@ -489,6 +489,107 @@ test('session service resumes threads without requiring experimental history fla
   });
 });
 
+test('session service branches from an arbitrary historical user question with a replay fallback', async () => {
+  const calls = [];
+  const service = new CodexSessionService({
+    activityStore: {
+      async addProject() {},
+      async addFocusedSession() {},
+    },
+    client: {
+      onNotification() {
+        return () => {};
+      },
+      async request(method, params) {
+        calls.push({ method, params });
+        if (method === 'thread/read') {
+          return {
+            thread: {
+              id: 'thread-1',
+              name: 'Focus thread',
+              cwd: '/tmp/workspace-a',
+              turns: [
+                {
+                  id: 'turn-1',
+                  status: 'completed',
+                  items: [
+                    {
+                      type: 'userMessage',
+                      id: 'user-1',
+                      content: [{ type: 'text', text: 'Original question', text_elements: [] }],
+                    },
+                    {
+                      type: 'agentMessage',
+                      id: 'agent-1',
+                      text: 'Original answer',
+                    },
+                  ],
+                },
+                {
+                  id: 'turn-2',
+                  status: 'completed',
+                  items: [
+                    {
+                      type: 'userMessage',
+                      id: 'user-2',
+                      content: [{ type: 'text', text: 'Second question', text_elements: [] }],
+                    },
+                    {
+                      type: 'agentMessage',
+                      id: 'agent-2',
+                      text: 'Second answer',
+                    },
+                  ],
+                },
+              ],
+            },
+          };
+        }
+
+        if (method === 'thread/start') {
+          return {
+            thread: {
+              id: 'thread-branch',
+              name: 'Branch thread',
+              cwd: '/tmp/workspace-a',
+              turns: [],
+            },
+          };
+        }
+
+        if (method === 'thread/resume') {
+          return {
+            thread: {
+              id: 'thread-branch',
+              name: 'Branch thread',
+              cwd: '/tmp/workspace-a',
+              turns: [],
+            },
+          };
+        }
+
+        if (method === 'turn/start') {
+          return { turnId: 'turn-branch', status: 'started' };
+        }
+
+        throw new Error(`Unexpected method: ${method}`);
+      },
+    },
+  });
+
+  const result = await service.branchFromQuestion('thread-1', 'user-2', 'Edited second question');
+
+  assert.equal(result.thread.id, 'thread-branch');
+  assert.equal(result.turnId, 'turn-branch');
+  const turnStart = calls.find((entry) => entry.method === 'turn/start');
+  assert.ok(turnStart);
+  assert.equal(turnStart.params.threadId, 'thread-branch');
+  assert.match(turnStart.params.input[0].text, /Edited second question/);
+  assert.match(turnStart.params.input[0].text, /Original question/);
+  assert.match(turnStart.params.input[0].text, /Original answer/);
+  assert.doesNotMatch(turnStart.params.input[0].text, /Second answer/);
+});
+
 test('session service renames a session via thread/name/set and updates cached metadata', async () => {
   const calls = [];
   const service = new CodexSessionService({
@@ -531,4 +632,3 @@ test('session service renames a session via thread/name/set and updates cached m
   assert.equal(service.threadIndex.get('thread-1').name, 'Renamed session');
   assert.equal(service.threadIndex.get('thread-1').preview, 'old preview');
 });
-

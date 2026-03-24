@@ -172,6 +172,17 @@ test('claude sdk provider forwards approval, pending-action, and session setting
       calls.push(['resolvePendingAction', actionId, resolution]);
       return { id: actionId, status: 'answered', payload: resolution };
     },
+    async branchFromQuestion(threadId, userMessageId, text) {
+      calls.push(['branchFromQuestion', threadId, userMessageId, text]);
+      return {
+        thread: {
+          id: 'thread-branch',
+          name: 'Branch thread',
+        },
+        turnId: 'turn-branch',
+        status: 'started',
+      };
+    },
   };
   const provider = new ClaudeSdkProvider({
     activityStore: {},
@@ -228,6 +239,17 @@ test('claude sdk provider forwards approval, pending-action, and session setting
       payload: { response: 'continue' },
     },
   );
+  assert.deepEqual(
+    await provider.branchFromQuestion('thread-1', 'user-msg-1:0', 'Edited question'),
+    {
+      thread: {
+        id: 'thread-branch',
+        name: 'Branch thread',
+      },
+      turnId: 'turn-branch',
+      status: 'started',
+    },
+  );
 
   assert.deepEqual(calls, [
     ['renameSession', 'thread-1', 'Renamed thread'],
@@ -239,6 +261,7 @@ test('claude sdk provider forwards approval, pending-action, and session setting
     ['approveRequest', 'approval-1'],
     ['denyRequest', 'approval-2'],
     ['resolvePendingAction', 'question-1', { response: 'continue' }],
+    ['branchFromQuestion', 'thread-1', 'user-msg-1:0', 'Edited question'],
   ]);
 });
 

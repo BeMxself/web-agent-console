@@ -783,6 +783,22 @@
   text-transform: uppercase;
 }
 
+.message-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.message-action-button {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .message-text {
   font-size: 14px;
 }

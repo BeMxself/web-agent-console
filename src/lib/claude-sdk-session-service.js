@@ -89,6 +89,7 @@ import {
   compareProjects,
   normalizeClaudeAgentTypeOptions,
 } from './claude-sdk-session-service-helpers.js';
+import { extractProviderMessageId } from './thread-branching.js';
 
 import {
   ingestExternalBridgeEvent,
@@ -271,6 +272,61 @@ export class ClaudeSdkSessionService extends SessionService {
     return {
       thread: this.decorateThread(createClaudeThreadPlaceholder(threadRecord), threadRecord),
     };
+  }
+
+  async branchFromQuestion(threadId, userMessageId, text) {
+    await this.ensureRuntimeStoreLoaded();
+    const threadRecord = await this.sessionIndex.readThread(threadId);
+    if (!threadRecord) {
+      throw new Error(`Claude thread not found: ${threadId}`);
+    }
+
+    const sourceSettings = await this.getSessionSettings(threadId);
+    if (threadRecord.claudeSessionId && typeof this.claudeSdk.forkSession === 'function') {
+      const forked = await this.claudeSdk.forkSession(
+        threadRecord.claudeSessionId,
+        {
+          ...buildSessionLookupOptions(threadRecord),
+          upToMessageId: extractProviderMessageId(userMessageId),
+        },
+      );
+
+      const forkedThreadRecord = await this.sessionIndex.upsertThread({
+        threadId: `claude-thread-${randomUUID()}`,
+        projectId: threadRecord.projectId,
+        claudeSessionId: forked.sessionId,
+        summary: threadRecord.summary,
+        createdAt: nowInSeconds(),
+        updatedAt: nowInSeconds(),
+      });
+      await this.activityStore.addProject(threadRecord.projectId ?? this.cwd);
+      await this.activityStore.addFocusedSession(
+        threadRecord.projectId ?? this.cwd,
+        forkedThreadRecord.threadId,
+      );
+
+      if (sourceSettings) {
+        await this.setSessionSettings(forkedThreadRecord.threadId, sourceSettings);
+      }
+
+      const started = await this.startTurn(forkedThreadRecord.threadId, {
+        text,
+        model: sourceSettings?.model ?? null,
+        reasoningEffort: sourceSettings?.reasoningEffort ?? null,
+        agentType: sourceSettings?.agentType ?? null,
+        attachments: [],
+      });
+
+      return {
+        ...started,
+        thread: this.decorateThread(
+          createClaudeThreadPlaceholder(forkedThreadRecord),
+          forkedThreadRecord,
+        ),
+      };
+    }
+
+    throw new Error('Claude historical branching fallback is not implemented without native forkSession support');
   }
 
   async readSession(threadId) {

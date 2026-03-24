@@ -364,6 +364,10 @@ test('smoke script allows claude-sdk startup without forcing ANTHROPIC_API_KEY',
       ...process.env,
       WEB_AGENT_PROVIDER: 'claude-sdk',
       ANTHROPIC_API_KEY: '',
+      RELAY_PORT: '4318',
+      RELAY_HOST: '127.0.0.1',
+      WEB_AGENT_AUTH_PASSWORD: '',
+      WEB_AGENT_AUTH_SECRET: '',
     },
   });
 

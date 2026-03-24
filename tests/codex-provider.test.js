@@ -71,3 +71,32 @@ test('codex provider accepts legacy and object turn request call shapes', async 
     ],
   ]);
 });
+
+test('codex provider forwards historical-question branching to the session service', async () => {
+  const calls = [];
+  const provider = new CodexProvider({
+    appServer: {},
+    client: {},
+    sessionService: {
+      async branchFromQuestion(threadId, userMessageId, text) {
+        calls.push(['branchFromQuestion', threadId, userMessageId, text]);
+        return {
+          thread: { id: 'thread-branch' },
+          turnId: 'turn-branch',
+          status: 'started',
+        };
+      },
+    },
+    initializeParams: {},
+  });
+  provider.run = async (operation) => operation();
+
+  const result = await provider.branchFromQuestion('thread-1', 'user-msg-2', 'Edited question');
+
+  assert.deepEqual(result, {
+    thread: { id: 'thread-branch' },
+    turnId: 'turn-branch',
+    status: 'started',
+  });
+  assert.deepEqual(calls, [['branchFromQuestion', 'thread-1', 'user-msg-2', 'Edited question']]);
+});

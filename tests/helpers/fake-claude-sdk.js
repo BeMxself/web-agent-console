@@ -10,6 +10,7 @@ export function createFakeClaudeSdk({
     queryClose: [],
     queryAbort: [],
     queryStreamInput: [],
+    forkSession: [],
     listSessions: [],
     getSessionInfo: [],
     getSessionMessages: [],
@@ -45,6 +46,12 @@ export function createFakeClaudeSdk({
     async getSessionMessages(sessionId, options = {}) {
       calls.getSessionMessages.push({ sessionId, options });
       return sessionMessagesById[sessionId] ?? [];
+    },
+    async forkSession(sessionId, options = {}) {
+      calls.forkSession.push({ sessionId, options });
+      return {
+        sessionId: options.sessionId ?? `${sessionId}-fork`,
+      };
     },
     async renameSession(sessionId, title, options = {}) {
       calls.renameSession.push({ sessionId, title, options });

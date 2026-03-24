@@ -35,8 +35,10 @@ import {
   canSendTurn,
   createInitialSessionSettings,
   findLatestUserQuestion,
+  findUserQuestionById,
   findConversationAttachment,
   getComposerAttachmentError,
+  getRewriteQuestionAction,
   getRewriteLastQuestionAction,
   normalizeComposerAttachments,
   normalizeSessionSettings,
@@ -797,12 +799,17 @@ export function createSessionControllerApi(ctx) {
       focusRenameInput(ctx.documentRef);
       return renameId;
     },
-    openRewriteDialog(sessionId = ctx.state.selectedSessionId) {
+    openRewriteDialog(userMessageId = null, sessionId = ctx.state.selectedSessionId) {
       const targetSessionId = String(sessionId ?? ctx.state.selectedSessionId ?? '').trim();
       const action = getRewriteLastQuestionAction(ctx.state);
       const detail = ctx.state.sessionDetailsById?.[targetSessionId] ?? null;
-      const latestQuestion = findLatestUserQuestion(detail);
-      if (!targetSessionId || action.disabled || !latestQuestion?.text?.trim()) {
+      const selectedQuestion = userMessageId
+        ? findUserQuestionById(detail, userMessageId)
+        : findLatestUserQuestion(detail);
+      const selectedQuestionAction = userMessageId
+        ? getRewriteQuestionAction(ctx.state, selectedQuestion)
+        : action;
+      if (!targetSessionId || selectedQuestionAction.disabled || !selectedQuestion?.text?.trim()) {
         return null;
       }
 
@@ -816,8 +823,9 @@ export function createSessionControllerApi(ctx) {
       ctx.pendingRewriteQuestion = {
         sessionId: targetSessionId,
         projectId: project.id ?? project.cwd ?? detail.cwd,
-        sourceTurnIndex: latestQuestion.turnIndex,
-        originalText: latestQuestion.text,
+        userMessageId: selectedQuestion.item.id,
+        sourceTurnIndex: selectedQuestion.turnIndex,
+        originalText: selectedQuestion.text,
       };
 
       const titleNode = ctx.documentRef?.querySelector?.('#rewrite-dialog-session-title');
@@ -827,7 +835,7 @@ export function createSessionControllerApi(ctx) {
 
       const input = ctx.documentRef?.querySelector?.('#rewrite-dialog-input');
       if (input) {
-        input.value = latestQuestion.text;
+        input.value = selectedQuestion.text;
       }
 
       openDialog(ctx.documentRef?.querySelector?.('#rewrite-dialog'));
@@ -856,49 +864,39 @@ export function createSessionControllerApi(ctx) {
         return null;
       }
 
-      const replayPrompt = buildRewriteLastQuestionPrompt(sourceDetail, normalizedText, {
-        sourceThreadId: pendingRewrite.sessionId,
-        sourceThreadName: sourceDetail.name ?? sourceDetail.id ?? '',
-      });
-      if (!replayPrompt) {
-        return null;
-      }
-
-      const sourceSettings = normalizeSessionSettings(
-        ctx.state.sessionSettingsById?.[pendingRewrite.sessionId],
-      );
       const created = await ctx.requestProtectedJson(
-        `/api/projects/${encodeURIComponent(pendingRewrite.projectId)}/sessions`,
+        `/api/sessions/${encodeURIComponent(pendingRewrite.sessionId)}/branch`,
         {
           method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            userMessageId: pendingRewrite.userMessageId,
+            text: normalizedText,
+          }),
         },
       );
-      if (!created?.thread?.id) {
+      if (!created?.thread?.id || !created?.turnId) {
         return null;
       }
 
       await ctx.controller.loadSessions();
       await ctx.controller.selectSession(created.thread.id);
-
-      const hasNonDefaultSettings =
-        sourceSettings.model ||
-        sourceSettings.reasoningEffort ||
-        sourceSettings.agentType ||
-        sourceSettings.sandboxMode;
-      if (hasNonDefaultSettings) {
-        await ctx.controller.setSessionSettings(created.thread.id, sourceSettings);
-      }
-
-      const result = await ctx.controller.sendTurn(replayPrompt);
-      if (!result) {
-        return null;
-      }
+      ctx.applyAction({
+        type: 'user_turn_submitted',
+        payload: {
+          threadId: created.thread.id,
+          turnId: created.turnId,
+          text: normalizedText,
+          attachments: [],
+        },
+      });
+      ctx.applyAction({
+        type: 'turn_started',
+        payload: { threadId: created.thread.id, turnId: created.turnId },
+      });
 
       ctx.controller.closeRewriteDialog();
-      return {
-        ...result,
-        threadId: created.thread.id,
-      };
+      return created;
     },
     closeRenameDialog() {
       ctx.pendingRenameSessionId = null;

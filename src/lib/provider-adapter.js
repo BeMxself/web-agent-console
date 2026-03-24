@@ -76,6 +76,10 @@ export class ProviderAdapter {
     throw createProviderNotImplementedError(this, 'renameSession');
   }
 
+  async branchFromQuestion() {
+    throw createProviderNotImplementedError(this, 'branchFromQuestion');
+  }
+
   async createSessionInProject() {
     throw createProviderNotImplementedError(this, 'createSessionInProject');
   }

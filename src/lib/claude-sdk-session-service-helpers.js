@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import {
+  forkSession,
   getSessionInfo,
   getSessionMessages,
   listSessions,
@@ -54,6 +55,7 @@ const DEFAULT_CLAUDE_SDK = Object.freeze({
   listSessions,
   getSessionInfo,
   getSessionMessages,
+  forkSession,
   renameSession,
 });
 

@@ -735,6 +735,13 @@ export function bindControllerDocumentEvents(ctx) {
     });
 
     conversationBody?.addEventListener('click', (event) => {
+      const rewriteUserMessageButton = event?.target?.closest?.('[data-rewrite-user-message]');
+      if (rewriteUserMessageButton) {
+        event.preventDefault?.();
+        void ctx.controller.openRewriteDialog(rewriteUserMessageButton.dataset.rewriteUserMessage);
+        return;
+      }
+
       const localFileLink = event?.target?.closest?.('[data-local-file-path]');
       if (localFileLink) {
         event.preventDefault?.();

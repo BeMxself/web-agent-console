@@ -69,8 +69,24 @@ export function renderMessageBubble(label, text, role, options = {}) {
 export function renderUserMessageBubble(item) {
   const messageText = extractUserText(item) || '已发送附件';
   return renderMessageBubble('用户', messageText, 'user', {
-    attachmentsHtml: renderUserMessageAttachments(item),
+    attachmentsHtml: [renderUserMessageActions(item), renderUserMessageAttachments(item)]
+      .filter(Boolean)
+      .join(''),
   });
+}
+
+export function renderUserMessageActions(item) {
+  const messageText = extractUserText(item);
+  const attachments = collectUserMessageAttachments(item);
+  if (!messageText || attachments.length > 0) {
+    return '';
+  }
+
+  return [
+    '<div class="message-actions">',
+    `<button class="message-action-button" type="button" data-rewrite-user-message="${escapeHtml(item.id ?? '')}">从这里重写</button>`,
+    '</div>',
+  ].join('');
 }
 
 export function renderUserMessageAttachments(item) {

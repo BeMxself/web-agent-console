@@ -165,54 +165,84 @@ export function findLatestUserQuestion(thread) {
   return null;
 }
 
+export function findUserQuestionById(thread, userMessageId) {
+  const normalizedTarget = String(userMessageId ?? '').trim();
+  if (!normalizedTarget) {
+    return null;
+  }
+
+  const turns = Array.isArray(thread?.turns) ? thread.turns : [];
+  for (let turnIndex = 0; turnIndex < turns.length; turnIndex += 1) {
+    const turn = turns[turnIndex];
+    const item = (turn?.items ?? []).find((entry) => entry?.id === normalizedTarget) ?? null;
+    if (!item || item.type !== 'userMessage') {
+      continue;
+    }
+
+    return {
+      turnIndex,
+      turn,
+      item,
+      text: extractUserText(item),
+      attachments: collectUserMessageAttachments(item),
+    };
+  }
+
+  return null;
+}
+
 export function getRewriteLastQuestionAction(state) {
-  if (!isAuthenticatedAppState(state)) {
-    return { visible: false, disabled: true, title: '登录后才可重写上个问题' };
-  }
-
   const sessionId = String(state?.selectedSessionId ?? '').trim();
-  if (!sessionId) {
-    return { visible: false, disabled: true, title: '选择会话后才可重写上个问题' };
-  }
-
   const detail = state?.sessionDetailsById?.[sessionId] ?? null;
-  if (!detail) {
-    return { visible: false, disabled: true, title: '加载会话详情后才可重写上个问题' };
-  }
-
   const latestQuestion = findLatestUserQuestion(detail);
   if (!latestQuestion?.text?.trim()) {
     return { visible: false, disabled: true, title: '当前会话没有可重写的上一条问题' };
   }
 
+  return getRewriteQuestionAction(state, latestQuestion);
+}
+
+export function getRewriteQuestionAction(state, question) {
+  if (!isAuthenticatedAppState(state)) {
+    return { visible: false, disabled: true, title: '登录后才可重写问题' };
+  }
+
+  const sessionId = String(state?.selectedSessionId ?? '').trim();
+  if (!sessionId) {
+    return { visible: false, disabled: true, title: '选择会话后才可重写问题' };
+  }
+
+  const detail = state?.sessionDetailsById?.[sessionId] ?? null;
+  if (!detail) {
+    return { visible: false, disabled: true, title: '加载会话详情后才可重写问题' };
+  }
+
+  if (!question?.text?.trim()) {
+    return { visible: false, disabled: true, title: '当前会话没有可重写的问题' };
+  }
+
   const sessionMeta = detail ?? findThreadMeta(state?.projects ?? [], sessionId);
   const status = state?.turnStatusBySession?.[sessionId] ?? 'idle';
   if (status === 'started' || status === 'interrupting') {
-    return { visible: true, disabled: true, title: '当前回合执行中，暂时不能重写上个问题' };
+    return { visible: true, disabled: true, title: '当前回合执行中，暂时不能重写问题' };
   }
 
-  if (
-    sessionMeta?.waitingOnApproval ||
-    Number(sessionMeta?.pendingApprovalCount ?? 0) > 0
-  ) {
-    return { visible: true, disabled: true, title: '等待审批完成后再重写上个问题' };
+  if (sessionMeta?.waitingOnApproval || Number(sessionMeta?.pendingApprovalCount ?? 0) > 0) {
+    return { visible: true, disabled: true, title: '等待审批完成后再重写问题' };
   }
 
-  if (
-    sessionMeta?.waitingOnQuestion ||
-    Number(sessionMeta?.pendingQuestionCount ?? 0) > 0
-  ) {
-    return { visible: true, disabled: true, title: '等待当前提问完成后再重写上个问题' };
+  if (sessionMeta?.waitingOnQuestion || Number(sessionMeta?.pendingQuestionCount ?? 0) > 0) {
+    return { visible: true, disabled: true, title: '等待当前提问完成后再重写问题' };
   }
 
-  if ((latestQuestion.attachments ?? []).length > 0) {
-    return { visible: true, disabled: true, title: '最后一个问题包含附件，暂不支持重写' };
+  if ((question.attachments ?? []).length > 0) {
+    return { visible: true, disabled: true, title: '这个问题包含附件，暂不支持重写' };
   }
 
   return {
     visible: true,
     disabled: false,
-    title: '重写上个问题，并在新会话中从该问题之前重新运行',
+    title: '重写这个问题，并在新会话中从该问题之前重新运行',
   };
 }
 

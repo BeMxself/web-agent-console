@@ -60,6 +60,7 @@ import {
   normalizeSandboxMode,
   createSandboxPolicy,
 } from './codex-session-service-helpers.js';
+import { buildBranchReplayPrompt } from './thread-branching.js';
 
 const CODEX_SANDBOX_MODE_OPTIONS = Object.freeze([
   Object.freeze({ value: 'read-only', label: '只读' }),
@@ -471,6 +472,48 @@ export class CodexSessionService extends SessionService {
     const result = await this.startSession({ cwd: projectId });
     await this.activityStore.addFocusedSession(projectId, result.thread.id);
     return result;
+  }
+
+  async branchFromQuestion(threadId, userMessageId, text) {
+    await this.ensureRuntimeStoreLoaded();
+    const detail = await this.readSession(threadId);
+    const thread = detail?.thread;
+    if (!thread) {
+      throw new Error(`Codex thread not found: ${threadId}`);
+    }
+
+    const projectId = thread.cwd ?? this.threadIndex.get(threadId)?.cwd ?? null;
+    if (!projectId) {
+      throw new Error(`Unable to resolve project for thread ${threadId}`);
+    }
+
+    const sourceSettings = await this.getSessionSettings(threadId);
+    const replayPrompt = buildBranchReplayPrompt(thread, userMessageId, text, {
+      sourceThreadId: threadId,
+      sourceThreadName: thread.name ?? thread.id ?? '',
+    });
+    if (!replayPrompt) {
+      throw new Error(`User message not found: ${userMessageId}`);
+    }
+
+    const created = await this.createSessionInProject(projectId);
+    if (sourceSettings) {
+      await this.setSessionSettings(created.thread.id, sourceSettings);
+    }
+
+    const started = await this.startTurn(created.thread.id, {
+      text: replayPrompt,
+      model: sourceSettings?.model ?? null,
+      reasoningEffort: sourceSettings?.reasoningEffort ?? null,
+      agentType: sourceSettings?.agentType ?? null,
+      sandboxMode: sourceSettings?.sandboxMode ?? null,
+      attachments: [],
+    });
+
+    return {
+      ...started,
+      thread: created.thread,
+    };
   }
 
   async handleApprovalRequest(message) {

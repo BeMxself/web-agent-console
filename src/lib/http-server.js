@@ -233,6 +233,18 @@ export function createHttpServer({ provider, publicDir, config = {} }) {
         return;
       }
 
+      if (req.method === 'POST' && /^\/api\/sessions\/[^/]+\/branch$/.test(pathname)) {
+        const sessionId = decodeURIComponent(pathname.split('/')[3]);
+        const body = await readJsonBody(req);
+        const data = await provider.branchFromQuestion(
+          sessionId,
+          body.userMessageId,
+          body.text,
+        );
+        writeJson(res, 202, data);
+        return;
+      }
+
       if (req.method === 'POST' && /^\/api\/sessions\/[^/]+\/interrupt$/.test(pathname)) {
         const sessionId = decodeURIComponent(pathname.split('/')[3]);
         const body = await readJsonBody(req);

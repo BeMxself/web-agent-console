@@ -106,6 +106,10 @@ export class ClaudeSdkProvider extends ProviderAdapter {
     return await this.run(() => this.sessionService.renameSession(threadId, name));
   }
 
+  async branchFromQuestion(threadId, userMessageId, text) {
+    return await this.run(() => this.sessionService.branchFromQuestion(threadId, userMessageId, text));
+  }
+
   async createSessionInProject(projectId) {
     return await this.run(() => this.sessionService.createSessionInProject(projectId));
   }

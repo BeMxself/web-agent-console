@@ -88,7 +88,7 @@ test('handleAskUserQuestion persists a pending question that can be resolved lat
     assert.equal(persisted.pendingActions[pending.id].status, 'answered');
     assert.equal(persisted.pendingActions[pending.id].payload.response, 'Proceed with plan A');
   } finally {
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 
@@ -142,7 +142,7 @@ test('readSession exposes pending questions in frontend-ready question shape', a
       },
     ]);
   } finally {
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 
@@ -391,6 +391,118 @@ test('startTurn rejects duplicate active turns on the same Claude thread', async
   }
 });
 
+test('Claude session service branches from an arbitrary historical user question using native forkSession', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'claude-session-service-branch-from-history-'));
+  const filePath = join(tempDir, 'claude-session-index.json');
+  const runtimeStorePath = join(tempDir, 'claude-runtime-store.json');
+  const fakeClaudeSdk = createFakeClaudeSdk({
+    sessionInfoById: {
+      'claude-session-1': {
+        sessionId: 'claude-session-1',
+        summary: 'Focus thread',
+        createdAt: Date.now() - 10_000,
+        lastModified: Date.now(),
+      },
+    },
+    sessionMessagesById: {
+      'claude-session-1': [
+        {
+          type: 'user',
+          uuid: 'user-msg-1',
+          message: {
+            content: [{ type: 'text', text: 'First question' }],
+          },
+        },
+        {
+          type: 'assistant',
+          uuid: 'assistant-msg-1',
+          message: {
+            content: [{ type: 'text', text: 'First answer' }],
+          },
+        },
+        {
+          type: 'user',
+          uuid: 'user-msg-2',
+          message: {
+            content: [{ type: 'text', text: 'Second question' }],
+          },
+        },
+        {
+          type: 'assistant',
+          uuid: 'assistant-msg-2',
+          message: {
+            content: [{ type: 'text', text: 'Second answer' }],
+          },
+        },
+      ],
+    },
+    queryResponseFactories: [
+      ({ options }) => ({
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: options.resume,
+          };
+          yield createSuccessResultMessage({
+            sessionId: options.resume,
+            uuid: 'result-branch-1',
+            result: 'Done',
+          });
+        },
+      }),
+    ],
+  });
+  const sessionIndex = new ClaudeSdkSessionIndex({ filePath });
+  const runtimeStore = new RuntimeStore({ filePath: runtimeStorePath });
+  const activityStore = createSnapshottingActivityStore();
+  const service = new ClaudeSdkSessionService({
+    activityStore,
+    claudeSdk: fakeClaudeSdk,
+    runtimeStore,
+    cwd: '/tmp/default-cwd',
+    sessionIndex,
+  });
+
+  try {
+    await sessionIndex.upsertThread({
+      threadId: 'thread-1',
+      projectId: '/tmp/workspace-a',
+      claudeSessionId: 'claude-session-1',
+      summary: 'Focus thread',
+      updatedAt: 10,
+      createdAt: 9,
+    });
+    await service.setSessionSettings('thread-1', {
+      model: 'opus',
+      reasoningEffort: 'high',
+    });
+
+    const result = await service.branchFromQuestion('thread-1', 'user-msg-1:0', 'Edited question');
+
+    assert.equal(fakeClaudeSdk.calls.forkSession.length, 1);
+    assert.equal(fakeClaudeSdk.calls.forkSession[0].sessionId, 'claude-session-1');
+    assert.equal(fakeClaudeSdk.calls.forkSession[0].options.dir, '/tmp/workspace-a');
+    assert.equal(fakeClaudeSdk.calls.forkSession[0].options.upToMessageId, 'user-msg-1');
+    assert.equal(fakeClaudeSdk.calls.query.length, 1);
+    assert.equal(fakeClaudeSdk.calls.query[0].options.resume, 'claude-session-1-fork');
+    const firstPromptMessage = await readFirstPromptMessage(fakeClaudeSdk.calls.query[0].prompt);
+    assert.equal(firstPromptMessage.message.content[0].text, 'Edited question');
+    assert.equal(result.thread.id.startsWith('claude-thread-'), true);
+    assert.equal(result.thread.id === 'thread-1', false);
+    assert.equal(result.turnId.startsWith('turn-'), true);
+    assert.equal((await sessionIndex.readThread(result.thread.id))?.claudeSessionId, 'claude-session-1-fork');
+    assert.deepEqual((await activityStore.load()).projects['/tmp/workspace-a'].focusedThreadIds, [result.thread.id]);
+    assert.deepEqual(await service.getSessionSettings(result.thread.id), {
+      model: 'opus',
+      reasoningEffort: 'high',
+      agentType: null,
+    });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('interruptTurn aborts the live Claude query through the supplied AbortController', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'claude-session-service-abort-fallback-'));
   const filePath = join(tempDir, 'claude-session-index.json');
@@ -584,4 +696,3 @@ test('Claude project listing reconciles imported duplicates once the same sdk se
     await rm(tempDir, { recursive: true, force: true });
   }
 });
-

@@ -233,6 +233,18 @@ test('http server returns grouped active and archived sessions from /api/session
         },
       };
     },
+    async branchFromQuestion(threadId, userMessageId, text) {
+      calls.push({ method: 'branchFromQuestion', threadId, userMessageId, text });
+      return {
+        thread: {
+          id: 'thread-branch',
+          cwd: '/tmp/workspace-a',
+          name: 'Branched thread',
+        },
+        turnId: 'turn-branch',
+        status: 'started',
+      };
+    },
     subscribe() {
       return () => {};
     },
@@ -318,6 +330,16 @@ test('http server returns grouped active and archived sessions from /api/session
   const renameSessionBody = await renameSessionResponse.json();
   assert.equal(renameSessionBody.thread.name, 'Renamed thread');
 
+  const branchResponse = await fetch(`${baseUrl}/api/sessions/thread-1/branch`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ userMessageId: 'user-msg-1:0', text: 'Edited question' }),
+  });
+  assert.equal(branchResponse.status, 202);
+  const branchBody = await branchResponse.json();
+  assert.equal(branchBody.thread.id, 'thread-branch');
+  assert.equal(branchBody.turnId, 'turn-branch');
+
   assert.deepEqual(calls, [
     {
       method: 'addFocusedSession',
@@ -350,6 +372,12 @@ test('http server returns grouped active and archived sessions from /api/session
       method: 'renameSession',
       threadId: 'thread-1',
       name: 'Renamed thread',
+    },
+    {
+      method: 'branchFromQuestion',
+      threadId: 'thread-1',
+      userMessageId: 'user-msg-1:0',
+      text: 'Edited question',
     },
   ]);
 
