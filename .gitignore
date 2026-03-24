@@ -27,3 +27,4 @@ docs/superpowers/
 
 # Local agent workflow artifacts
 .superpowers/
+.worktrees/
