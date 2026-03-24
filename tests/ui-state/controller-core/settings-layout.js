@@ -15,6 +15,43 @@ import {
   jsonErrorResponse,
 } from '../shared.js';
 
+function trackPropertyWrites(target, propertyName) {
+  let value = target[propertyName];
+  let count = 0;
+  Object.defineProperty(target, propertyName, {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return value;
+    },
+    set(nextValue) {
+      value = nextValue;
+      count += 1;
+    },
+  });
+
+  return {
+    get count() {
+      return count;
+    },
+  };
+}
+
+function trackStyleSetPropertyCalls(style) {
+  const originalSetProperty = style.setProperty.bind(style);
+  let count = 0;
+  style.setProperty = (name, value) => {
+    count += 1;
+    return originalSetProperty(name, value);
+  };
+
+  return {
+    get count() {
+      return count;
+    },
+  };
+}
+
 
 test('browser app loads session option catalogs, restores per-session settings, and disables controls for running sessions', async () => {
   const fakeEventSource = createFakeEventSource();
@@ -1112,4 +1149,167 @@ test('browser app keeps the compact settings strip stable while realtime session
   });
 
   assert.equal(settingsWrites.count, initialSettingsWrites);
+});
+
+test('browser app avoids rewriting stable header and composer chrome during status polling', async () => {
+  const fakeDocument = createFakeDocument({ mobile: true });
+  const fakeEventSource = createFakeEventSource();
+  const conversationStatusWrites = trackPropertyWrites(fakeDocument.conversationStatus, 'innerHTML');
+  const conversationTitleWrites = trackPropertyWrites(fakeDocument.conversationTitle, 'textContent');
+  const composerPlaceholderWrites = trackPropertyWrites(fakeDocument.composerInput, 'placeholder');
+  const layoutStyleWrites = trackStyleSetPropertyCalls(fakeDocument.appLayout.style);
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-1',
+                  name: 'Running thread',
+                  runtime: {
+                    turnStatus: 'started',
+                    activeTurnId: 'turn-1',
+                    diff: null,
+                    realtime: {
+                      status: 'started',
+                      sessionId: 'rt-1',
+                      items: [{ index: 1, summary: 'init', value: { type: 'init' } }],
+                    },
+                  },
+                  settings: {
+                    model: 'gpt-5.4',
+                    reasoningEffort: 'high',
+                    agentType: 'plan',
+                    sandboxMode: 'workspace-write',
+                  },
+                },
+              ],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          modelOptions: [
+            { value: '', label: '默认' },
+            { value: 'gpt-5.4', label: 'gpt-5.4' },
+          ],
+          reasoningEffortOptions: [
+            { value: '', label: '默认' },
+            { value: 'high', label: '高' },
+          ],
+          agentTypeOptions: [
+            { value: 'default', label: '执行' },
+            { value: 'plan', label: '计划' },
+          ],
+          sandboxModeOptions: [
+            { value: 'read-only', label: '只读' },
+            { value: 'workspace-write', label: '工作区可写' },
+            { value: 'danger-full-access', label: '完全访问' },
+          ],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: 'default',
+            sandboxMode: 'danger-full-access',
+          },
+          runtimeContext: {
+            sandboxMode: 'workspace-write',
+          },
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: 'gpt-5.4',
+          reasoningEffort: 'high',
+          agentType: 'plan',
+          sandboxMode: 'workspace-write',
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Running thread',
+            cwd: '/tmp/workspace-a',
+            runtime: {
+              turnStatus: 'started',
+              activeTurnId: 'turn-1',
+              diff: null,
+              realtime: {
+                status: 'started',
+                sessionId: 'rt-1',
+                items: [{ index: 1, summary: 'init', value: { type: 'init' } }],
+              },
+            },
+            settings: {
+              model: 'gpt-5.4',
+              reasoningEffort: 'high',
+              agentType: 'plan',
+              sandboxMode: 'workspace-write',
+            },
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadApprovalMode();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  const initialConversationStatusWrites = conversationStatusWrites.count;
+  const initialConversationTitleWrites = conversationTitleWrites.count;
+  const initialComposerPlaceholderWrites = composerPlaceholderWrites.count;
+  const initialLayoutStyleWrites = layoutStyleWrites.count;
+
+  await app.loadStatus();
+
+  assert.equal(conversationStatusWrites.count, initialConversationStatusWrites);
+  assert.equal(conversationTitleWrites.count, initialConversationTitleWrites);
+  assert.equal(composerPlaceholderWrites.count, initialComposerPlaceholderWrites);
+  assert.equal(layoutStyleWrites.count, initialLayoutStyleWrites);
+
+  fakeEventSource.emit({
+    type: 'thread_realtime_item_added',
+    payload: {
+      threadId: 'thread-1',
+      item: { type: 'progress', label: 'step-2' },
+    },
+  });
+
+  assert.equal(conversationStatusWrites.count, initialConversationStatusWrites);
+  assert.equal(conversationTitleWrites.count, initialConversationTitleWrites);
+  assert.equal(composerPlaceholderWrites.count, initialComposerPlaceholderWrites);
+  assert.equal(layoutStyleWrites.count, initialLayoutStyleWrites);
 });

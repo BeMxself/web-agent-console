@@ -493,6 +493,18 @@ export function normalizeSystemStatus(status) {
   };
 }
 
+export function sameSystemStatus(left, right) {
+  const previous = normalizeSystemStatus(left);
+  const next = normalizeSystemStatus(right);
+  return (
+    previous.overall === next.overall &&
+    previous.relay.status === next.relay.status &&
+    previous.backend.status === next.backend.status &&
+    previous.requests.status === next.requests.status &&
+    previous.lastError === next.lastError
+  );
+}
+
 export function getStatusTone(status) {
   if (status.backend?.status === 'connected') {
     return 'connected';

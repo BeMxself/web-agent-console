@@ -13,6 +13,7 @@ import {
   normalizeTheme,
   openDialog,
   requestJson,
+  sameSystemStatus,
   scrollConversationToBottom,
   setRenameDialogSession,
 } from './dom-utils.js';
@@ -162,7 +163,9 @@ export function createSessionControllerApi(ctx) {
           return ctx.state.systemStatus;
         }
 
-        ctx.applyAction({ type: 'system_status_loaded', payload: status });
+        if (!sameSystemStatus(status, ctx.state.systemStatus)) {
+          ctx.applyAction({ type: 'system_status_loaded', payload: status });
+        }
         if (ctx.state.loadError && status.backend?.status === 'connected') {
           await ctx.controller.loadSessions();
         }

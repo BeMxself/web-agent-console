@@ -281,21 +281,40 @@ export function syncComposerButtons(sendButton, interruptButton, state) {
   const primaryAction = resolveComposerPrimaryAction(state);
 
   if (sendButton) {
-    sendButton.textContent = primaryAction.label;
-    sendButton.disabled = primaryAction.disabled;
-    sendButton.title = primaryAction.title;
+    if (sendButton.textContent !== primaryAction.label) {
+      sendButton.textContent = primaryAction.label;
+    }
+    if (sendButton.disabled !== primaryAction.disabled) {
+      sendButton.disabled = primaryAction.disabled;
+    }
+    if (sendButton.title !== primaryAction.title) {
+      sendButton.title = primaryAction.title;
+    }
     if (sendButton.dataset) {
-      sendButton.dataset.action = primaryAction.kind;
+      if (sendButton.dataset.action !== primaryAction.kind) {
+        sendButton.dataset.action = primaryAction.kind;
+      }
     }
   }
 
   if (interruptButton) {
-    interruptButton.hidden = true;
-    interruptButton.disabled = true;
-    interruptButton.textContent = '中断';
-    interruptButton.title = '中断当前回合';
+    if (!interruptButton.hidden) {
+      interruptButton.hidden = true;
+    }
+    if (!interruptButton.disabled) {
+      interruptButton.disabled = true;
+    }
+    if (interruptButton.textContent !== '中断') {
+      interruptButton.textContent = '中断';
+    }
+    if (interruptButton.title !== '中断当前回合') {
+      interruptButton.title = '中断当前回合';
+    }
     if (interruptButton.dataset) {
-      interruptButton.dataset.interruptable = String(primaryAction.kind === 'interrupt');
+      const nextInterruptable = String(primaryAction.kind === 'interrupt');
+      if (interruptButton.dataset.interruptable !== nextInterruptable) {
+        interruptButton.dataset.interruptable = nextInterruptable;
+      }
     }
   }
 }
@@ -349,10 +368,16 @@ export function syncComposerInput(composerInput, state) {
     composerInput.value = state.composerDraft;
   }
 
-  composerInput.disabled = !isAuthenticatedAppState(state);
-  composerInput.placeholder = isAuthenticatedAppState(state)
+  const nextDisabled = !isAuthenticatedAppState(state);
+  if (composerInput.disabled !== nextDisabled) {
+    composerInput.disabled = nextDisabled;
+  }
+  const nextPlaceholder = isAuthenticatedAppState(state)
     ? '输入下一步请求'
     : '请输入共享密码后再继续';
+  if (composerInput.placeholder !== nextPlaceholder) {
+    composerInput.placeholder = nextPlaceholder;
+  }
   syncComposerInputHeight(composerInput);
 }
 
@@ -365,9 +390,14 @@ export function syncComposerInputHeight(composerInput) {
   const maxHeight = 148;
   const scrollHeight = Number(composerInput.scrollHeight ?? 0);
   const resolvedHeight = Math.min(maxHeight, Math.max(minHeight, scrollHeight || minHeight));
-
-  composerInput.style.height = `${resolvedHeight}px`;
-  composerInput.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+  const nextHeight = `${resolvedHeight}px`;
+  if (composerInput.style.height !== nextHeight) {
+    composerInput.style.height = nextHeight;
+  }
+  const nextOverflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+  if (composerInput.style.overflowY !== nextOverflowY) {
+    composerInput.style.overflowY = nextOverflowY;
+  }
 }
 
 export function syncComposerAttachmentsStrip(container, state) {
@@ -396,8 +426,14 @@ export function syncComposerAttachmentError(container, state) {
   }
 
   const message = getComposerAttachmentError(state);
-  container.hidden = !message;
-  container.textContent = message ?? '';
+  const nextHidden = !message;
+  if (container.hidden !== nextHidden) {
+    container.hidden = nextHidden;
+  }
+  const nextMessage = message ?? '';
+  if (container.textContent !== nextMessage) {
+    container.textContent = nextMessage;
+  }
 }
 
 export function syncComposerInlineFeedback(container, state) {
@@ -406,8 +442,14 @@ export function syncComposerInlineFeedback(container, state) {
   }
 
   const message = resolveComposerInlineFeedback(state);
-  container.hidden = !message;
-  container.textContent = message ?? '';
+  const nextHidden = !message;
+  if (container.hidden !== nextHidden) {
+    container.hidden = nextHidden;
+  }
+  const nextMessage = message ?? '';
+  if (container.textContent !== nextMessage) {
+    container.textContent = nextMessage;
+  }
 }
 
 export function resolveComposerInlineFeedback(state) {
@@ -449,32 +491,62 @@ export function syncComposerAttachmentActions(
   const menuOpen = !disabled && state.composerAttachmentMenuOpen === true;
 
   if (fileButton) {
-    fileButton.disabled = disabled;
-    fileButton.hidden = false;
-    fileButton.textContent = '+';
-    fileButton.title = '添加附件';
-    fileButton.setAttribute?.('aria-expanded', String(menuOpen));
+    if (fileButton.disabled !== disabled) {
+      fileButton.disabled = disabled;
+    }
+    if (fileButton.hidden) {
+      fileButton.hidden = false;
+    }
+    if (fileButton.textContent !== '+') {
+      fileButton.textContent = '+';
+    }
+    if (fileButton.title !== '添加附件') {
+      fileButton.title = '添加附件';
+    }
+    const nextExpanded = String(menuOpen);
+    if (fileButton.getAttribute?.('aria-expanded') !== nextExpanded) {
+      fileButton.setAttribute?.('aria-expanded', nextExpanded);
+    }
   }
 
   if (fileActionButton) {
-    fileActionButton.disabled = disabled;
-    fileActionButton.hidden = !menuOpen;
-    fileActionButton.textContent = '上传文件';
+    if (fileActionButton.disabled !== disabled) {
+      fileActionButton.disabled = disabled;
+    }
+    const nextHidden = !menuOpen;
+    if (fileActionButton.hidden !== nextHidden) {
+      fileActionButton.hidden = nextHidden;
+    }
+    if (fileActionButton.textContent !== '上传文件') {
+      fileActionButton.textContent = '上传文件';
+    }
   }
 
   if (imageButton) {
-    imageButton.disabled = disabled;
-    imageButton.hidden = !menuOpen;
-    imageButton.textContent = '上传图片';
+    if (imageButton.disabled !== disabled) {
+      imageButton.disabled = disabled;
+    }
+    const nextHidden = !menuOpen;
+    if (imageButton.hidden !== nextHidden) {
+      imageButton.hidden = nextHidden;
+    }
+    if (imageButton.textContent !== '上传图片') {
+      imageButton.textContent = '上传图片';
+    }
   }
 
   if (menu) {
-    menu.hidden = !menuOpen;
+    const nextHidden = !menuOpen;
+    if (menu.hidden !== nextHidden) {
+      menu.hidden = nextHidden;
+    }
   }
 
   for (const element of [fileInput, imageInput]) {
     if (element) {
-      element.disabled = disabled;
+      if (element.disabled !== disabled) {
+        element.disabled = disabled;
+      }
     }
   }
 }

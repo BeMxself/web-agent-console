@@ -38,6 +38,27 @@ import {
 import { renderTurn } from './render-turn-items.js';
 
 const approvalControlsMarkupCache = new WeakMap();
+
+function syncDatasetValue(dataset, key, value) {
+  if (!dataset) {
+    return;
+  }
+
+  if (dataset[key] !== value) {
+    dataset[key] = value;
+  }
+}
+
+function syncStyleProperty(style, name, value) {
+  if (!style?.setProperty) {
+    return;
+  }
+
+  if (style.getPropertyValue?.(name) !== value) {
+    style.setProperty(name, value);
+  }
+}
+
 export function renderProjectSidebar(state) {
   const header = renderProjectSidebarHeader(state.projects.length > 0, state.systemStatus);
   const footer = renderProjectSidebarFooter(state);
@@ -422,22 +443,26 @@ export function syncPanelLayout(appLayout, state) {
     return;
   }
 
-  appLayout.dataset.projectPanel = state.projectPanelCollapsed ? 'collapsed' : 'expanded';
-  appLayout.dataset.activityPanel = state.activityPanelCollapsed ? 'collapsed' : 'expanded';
-  appLayout.dataset.authLocked = String(!isAuthenticatedAppState(state));
-  appLayout.style?.setProperty?.(
+  syncDatasetValue(appLayout.dataset, 'projectPanel', state.projectPanelCollapsed ? 'collapsed' : 'expanded');
+  syncDatasetValue(appLayout.dataset, 'activityPanel', state.activityPanelCollapsed ? 'collapsed' : 'expanded');
+  syncDatasetValue(appLayout.dataset, 'authLocked', String(!isAuthenticatedAppState(state)));
+  syncStyleProperty(
+    appLayout.style,
     '--project-panel-width',
     state.projectPanelCollapsed ? '0px' : `${state.projectPanelWidth}px`,
   );
-  appLayout.style?.setProperty?.(
+  syncStyleProperty(
+    appLayout.style,
     '--activity-panel-width',
     state.activityPanelCollapsed ? '0px' : `${state.activityPanelWidth}px`,
   );
-  appLayout.style?.setProperty?.(
+  syncStyleProperty(
+    appLayout.style,
     '--project-resizer-width',
     state.projectPanelCollapsed ? '0px' : '16px',
   );
-  appLayout.style?.setProperty?.(
+  syncStyleProperty(
+    appLayout.style,
     '--activity-resizer-width',
     state.activityPanelCollapsed ? '0px' : '16px',
   );
@@ -446,15 +471,15 @@ export function syncPanelLayout(appLayout, state) {
 export function syncTheme(documentRef, appLayout, state) {
   const theme = normalizeTheme(state?.theme);
   if (appLayout?.dataset) {
-    appLayout.dataset.theme = theme;
+    syncDatasetValue(appLayout.dataset, 'theme', theme);
   }
 
   if (documentRef?.body?.dataset) {
-    documentRef.body.dataset.theme = theme;
+    syncDatasetValue(documentRef.body.dataset, 'theme', theme);
   }
 
   if (documentRef?.documentElement?.dataset) {
-    documentRef.documentElement.dataset.theme = theme;
+    syncDatasetValue(documentRef.documentElement.dataset, 'theme', theme);
   }
 
   syncStandaloneThemeToggle(documentRef?.querySelector?.('#auth-theme-toggle'), theme);
@@ -471,12 +496,19 @@ export function syncStandaloneThemeToggle(button, currentTheme) {
   const toggleIcon = theme === 'dark' ? '☀' : '☾';
 
   if (button.dataset) {
-    button.dataset.themeNextTheme = nextTheme;
+    syncDatasetValue(button.dataset, 'themeNextTheme', nextTheme);
   }
 
-  button.setAttribute?.('aria-label', toggleLabel);
-  button.setAttribute?.('title', toggleLabel);
-  button.innerHTML = `<span class="auth-theme-toggle-icon" aria-hidden="true">${toggleIcon}</span>`;
+  if (button.getAttribute?.('aria-label') !== toggleLabel) {
+    button.setAttribute?.('aria-label', toggleLabel);
+  }
+  if (button.getAttribute?.('title') !== toggleLabel) {
+    button.setAttribute?.('title', toggleLabel);
+  }
+  const nextMarkup = `<span class="auth-theme-toggle-icon" aria-hidden="true">${toggleIcon}</span>`;
+  if (button.innerHTML !== nextMarkup) {
+    button.innerHTML = nextMarkup;
+  }
 }
 
 export function syncPanelToggleButton(button, { collapsed, label }) {
@@ -485,11 +517,17 @@ export function syncPanelToggleButton(button, { collapsed, label }) {
   }
 
   if (button.dataset) {
-    button.dataset.panelState = collapsed ? 'collapsed' : 'expanded';
+    syncDatasetValue(button.dataset, 'panelState', collapsed ? 'collapsed' : 'expanded');
   }
 
-  button.ariaExpanded = String(!collapsed);
-  button.title = `${collapsed ? '展开' : '收起'}${label}`;
+  const nextExpanded = String(!collapsed);
+  if (button.ariaExpanded !== nextExpanded) {
+    button.ariaExpanded = nextExpanded;
+  }
+  const nextTitle = `${collapsed ? '展开' : '收起'}${label}`;
+  if (button.title !== nextTitle) {
+    button.title = nextTitle;
+  }
 }
 
 export function syncPanelResizer(handle, { hidden, label, width }) {
@@ -497,9 +535,18 @@ export function syncPanelResizer(handle, { hidden, label, width }) {
     return;
   }
 
-  handle.hidden = Boolean(hidden);
-  handle.title = `${label}宽度 ${Math.round(width)}px`;
-  handle.setAttribute?.('aria-valuenow', String(Math.round(width)));
+  const nextHidden = Boolean(hidden);
+  if (handle.hidden !== nextHidden) {
+    handle.hidden = nextHidden;
+  }
+  const nextTitle = `${label}宽度 ${Math.round(width)}px`;
+  if (handle.title !== nextTitle) {
+    handle.title = nextTitle;
+  }
+  const nextValue = String(Math.round(width));
+  if (handle.getAttribute?.('aria-valuenow') !== nextValue) {
+    handle.setAttribute?.('aria-valuenow', nextValue);
+  }
 }
 
 export function syncConversationTitle(titleNode, title) {
@@ -508,9 +555,16 @@ export function syncConversationTitle(titleNode, title) {
   }
 
   const normalizedTitle = typeof title === 'string' ? title : '';
-  titleNode.textContent = normalizedTitle;
-  titleNode.title = normalizedTitle;
-  titleNode.hidden = !normalizedTitle;
+  if (titleNode.textContent !== normalizedTitle) {
+    titleNode.textContent = normalizedTitle;
+  }
+  if (titleNode.title !== normalizedTitle) {
+    titleNode.title = normalizedTitle;
+  }
+  const nextHidden = !normalizedTitle;
+  if (titleNode.hidden !== nextHidden) {
+    titleNode.hidden = nextHidden;
+  }
 }
 
 export function syncConversationStatus(statusNode, status) {
@@ -522,17 +576,32 @@ export function syncConversationStatus(statusNode, status) {
   const tone = getStatusTone(normalizedStatus);
   const compactLabel = getCompactStatusLabel(normalizedStatus);
   const detailedLabel = getStatusLabel(normalizedStatus);
-  statusNode.className = `conversation-status conversation-status--${tone}`;
-  statusNode.dataset.statusTone = tone;
-  statusNode.dataset.statusLabel = compactLabel;
-  statusNode.title = normalizedStatus.lastError ?? detailedLabel;
-  statusNode.textContent = compactLabel;
-  statusNode.innerHTML = [
+  const nextClassName = `conversation-status conversation-status--${tone}`;
+  if (statusNode.className !== nextClassName) {
+    statusNode.className = nextClassName;
+  }
+  syncDatasetValue(statusNode.dataset, 'statusTone', tone);
+  syncDatasetValue(statusNode.dataset, 'statusLabel', compactLabel);
+  const nextTitle = normalizedStatus.lastError ?? detailedLabel;
+  if (statusNode.title !== nextTitle) {
+    statusNode.title = nextTitle;
+  }
+  const nextMarkup = [
     '<span class="conversation-status-light" aria-hidden="true"></span>',
     `<span class="conversation-status-label">${escapeHtml(compactLabel)}</span>`,
   ].join('');
-  statusNode.setAttribute?.('aria-label', compactLabel);
-  statusNode.hidden = false;
+  if (statusNode.innerHTML !== nextMarkup) {
+    statusNode.innerHTML = nextMarkup;
+  }
+  if (statusNode.textContent !== compactLabel) {
+    statusNode.textContent = compactLabel;
+  }
+  if (statusNode.getAttribute?.('aria-label') !== compactLabel) {
+    statusNode.setAttribute?.('aria-label', compactLabel);
+  }
+  if (statusNode.hidden) {
+    statusNode.hidden = false;
+  }
 }
 
 export function syncConversationNavToggle(toggle, checked) {
@@ -540,7 +609,10 @@ export function syncConversationNavToggle(toggle, checked) {
     return;
   }
 
-  toggle.checked = Boolean(checked);
+  const nextChecked = Boolean(checked);
+  if (toggle.checked !== nextChecked) {
+    toggle.checked = nextChecked;
+  }
 }
 
 export function syncApprovalModeControls(
@@ -567,25 +639,46 @@ export function syncAuthGate(authGate, loginError, loginButton, loginPassword, l
   const locked = !auth.authenticated;
 
   if (authGate) {
-    authGate.hidden = !locked;
+    const nextHidden = !locked;
+    if (authGate.hidden !== nextHidden) {
+      authGate.hidden = nextHidden;
+    }
   }
 
   if (loginError) {
-    loginError.textContent = auth.error ?? '';
-    loginError.hidden = !auth.error;
+    const nextError = auth.error ?? '';
+    if (loginError.textContent !== nextError) {
+      loginError.textContent = nextError;
+    }
+    const nextHidden = !auth.error;
+    if (loginError.hidden !== nextHidden) {
+      loginError.hidden = nextHidden;
+    }
   }
 
   if (loginButton) {
-    loginButton.disabled = auth.pending || auth.checking;
-    loginButton.textContent = auth.pending ? '登录中…' : '登录';
+    const nextDisabled = auth.pending || auth.checking;
+    if (loginButton.disabled !== nextDisabled) {
+      loginButton.disabled = nextDisabled;
+    }
+    const nextText = auth.pending ? '登录中…' : '登录';
+    if (loginButton.textContent !== nextText) {
+      loginButton.textContent = nextText;
+    }
   }
 
   if (loginPassword) {
-    loginPassword.disabled = auth.pending || auth.checking;
+    const nextDisabled = auth.pending || auth.checking;
+    if (loginPassword.disabled !== nextDisabled) {
+      loginPassword.disabled = nextDisabled;
+    }
   }
 
   if (logoutButton) {
-    logoutButton.hidden = !auth.authenticated;
+    const nextHidden = !auth.authenticated;
+    if (logoutButton.hidden !== nextHidden) {
+      logoutButton.hidden = nextHidden;
+    }
   }
 }
 
