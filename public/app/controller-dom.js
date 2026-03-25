@@ -386,16 +386,15 @@ export function renderApp(ctx) {
     }
     if (composerCollapseToggle) {
       const collapsed = Boolean(ctx.state.composerCollapsed);
-      const nextLabel = collapsed ? '展开底栏' : '压缩底栏';
-      if (composerCollapseToggle.textContent !== nextLabel) {
-        composerCollapseToggle.textContent = nextLabel;
-      }
       if (composerCollapseToggle.dataset?.collapsed !== String(collapsed)) {
         composerCollapseToggle.dataset.collapsed = String(collapsed);
       }
       const nextTitle = collapsed ? '展开底栏' : '压缩底栏';
       if (composerCollapseToggle.title !== nextTitle) {
         composerCollapseToggle.title = nextTitle;
+      }
+      if (composerCollapseToggle.getAttribute?.('aria-label') !== nextTitle) {
+        composerCollapseToggle.setAttribute?.('aria-label', nextTitle);
       }
     }
     const composerSettingsScopeId = getComposerSettingsScopeId(ctx.state);
