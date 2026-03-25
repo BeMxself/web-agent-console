@@ -463,6 +463,8 @@ test('Claude session service branches from an arbitrary historical user question
     cwd: '/tmp/default-cwd',
     sessionIndex,
   });
+  const events = [];
+  service.subscribe((event) => events.push(event));
 
   try {
     await sessionIndex.upsertThread({
@@ -498,8 +500,9 @@ test('Claude session service branches from an arbitrary historical user question
       reasoningEffort: 'high',
       agentType: null,
     });
+    await waitForCondition(() => events.some((event) => event.type === 'turn_completed'));
   } finally {
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 
