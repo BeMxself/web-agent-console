@@ -42,6 +42,7 @@ import {
   getRewriteLastQuestionAction,
   normalizeComposerAttachments,
   normalizeSessionSettings,
+  resolveSessionSettingsScopeId,
 } from './session-utils.js';
 import {
   getComposerSettingsScopeId,
@@ -318,6 +319,9 @@ export function createSessionControllerApi(ctx) {
       }
 
       const draftAttachments = normalizeComposerAttachments(ctx.state.composerAttachments);
+      const draftSettings = normalizeSessionSettings(
+        ctx.state.sessionSettingsById[resolveSessionSettingsScopeId(ctx.state)],
+      );
       let sessionId = ctx.state.selectedSessionId;
       if (!sessionId && ctx.state.pendingSessionProjectId) {
         ctx.applyAction({ type: 'project_session_creation_started' });
@@ -339,9 +343,22 @@ export function createSessionControllerApi(ctx) {
         await ctx.controller.loadSessions();
         await ctx.controller.selectSession(created.thread.id, { preserveComposerAttachments: true });
         sessionId = created.thread.id;
+        if (
+          draftSettings.model ||
+          draftSettings.reasoningEffort ||
+          draftSettings.agentType ||
+          draftSettings.sandboxMode
+        ) {
+          ctx.applyAction({
+            type: 'session_settings_changed',
+            payload: { threadId: sessionId, settings: draftSettings },
+          });
+        }
       }
 
-      const sessionSettings = normalizeSessionSettings(ctx.state.sessionSettingsById[sessionId]);
+      const sessionSettings = sessionId
+        ? normalizeSessionSettings(ctx.state.sessionSettingsById[sessionId] ?? draftSettings)
+        : draftSettings;
       const turnRequestBody = {
         text: draftText,
         model: sessionSettings.model,

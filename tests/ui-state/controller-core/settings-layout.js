@@ -732,6 +732,135 @@ test('browser app renders compact settings metadata, collapses the mobile settin
   assert.match(fakeDocument.approvalModeControls.innerHTML, /data-approval-mode-select="true"[^>]*disabled/);
 });
 
+test('browser app allows editing draft session settings before the first project send and uses them for the first turn', async () => {
+  const fakeDocument = createFakeDocument();
+  const requests = [];
+  let createdProjectSession = false;
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: createdProjectSession
+                ? [{ id: 'thread-3', name: 'Project session', cwd: '/tmp/workspace-a' }]
+                : [],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'codex',
+          modelOptions: [
+            { value: '', label: '默认' },
+            { value: 'gpt-5.4', label: 'gpt-5.4' },
+          ],
+          reasoningEffortOptions: [
+            { value: '', label: '默认' },
+            { value: 'high', label: '高' },
+          ],
+          agentTypeOptions: [
+            { value: 'default', label: '执行' },
+            { value: 'plan', label: '计划' },
+          ],
+          sandboxModeOptions: [
+            { value: 'read-only', label: '只读' },
+            { value: 'workspace-write', label: '工作区可写' },
+          ],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: 'default',
+            sandboxMode: 'read-only',
+          },
+        });
+      }
+
+      if (url === '/api/projects/%2Ftmp%2Fworkspace-a/sessions' && options.method === 'POST') {
+        createdProjectSession = true;
+        requests.push({ url, method: options.method });
+        return jsonResponse(
+          {
+            thread: {
+              id: 'thread-3',
+              name: 'Project session',
+              cwd: '/tmp/workspace-a',
+            },
+          },
+          201,
+        );
+      }
+
+      if (url === '/api/sessions/thread-3') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-3',
+            name: 'Project session',
+            cwd: '/tmp/workspace-a',
+            turns: [],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-3/turns' && options.method === 'POST') {
+        requests.push({
+          url,
+          method: options.method,
+          body: JSON.parse(options.body),
+        });
+        return jsonResponse({ turnId: 'turn-1', status: 'started' }, 202);
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}${options.method ? ` (${options.method})` : ''}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.startSessionInProject('/tmp/workspace-a');
+
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-session-model-select="true"[^>]*disabled/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-session-reasoning-select="true"[^>]*disabled/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-session-agent-select="true"[^>]*disabled/);
+  assert.doesNotMatch(fakeDocument.approvalModeControls.innerHTML, /data-session-sandbox-select="true"[^>]*disabled/);
+
+  await app.setSessionSettings(null, {
+    model: 'gpt-5.4',
+    reasoningEffort: 'high',
+    agentType: 'plan',
+    sandboxMode: 'workspace-write',
+  });
+
+  app.setComposerDraft('first project message');
+  await app.sendTurn('first project message');
+
+  assert.deepEqual(requests, [
+    { url: '/api/projects/%2Ftmp%2Fworkspace-a/sessions', method: 'POST' },
+    {
+      url: '/api/sessions/thread-3/turns',
+      method: 'POST',
+      body: {
+        text: 'first project message',
+        model: 'gpt-5.4',
+        reasoningEffort: 'high',
+        agentType: 'plan',
+        sandboxMode: 'workspace-write',
+        attachments: [],
+      },
+    },
+  ]);
+});
+
 test('browser app keeps the compact settings strip stable during unrelated composer and status updates', async () => {
   const fakeDocument = createFakeDocument({ mobile: true });
   const settingsWrites = trackInnerHtmlWrites(fakeDocument.approvalModeControls);

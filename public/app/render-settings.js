@@ -5,6 +5,7 @@ import {
   isSessionBusy,
   normalizeApprovalMode,
   normalizeSessionOptions,
+  resolveSessionSettingsScopeId,
   resolveCurrentAgentType,
   resolveCurrentSandboxMode,
   resolveSandboxModeLabel,
@@ -24,15 +25,16 @@ export function renderApprovalModeControls(
 ) {
   const normalizedMode = normalizeApprovalMode(state?.approvalMode);
   const sessionOptions = normalizeSessionOptions(state?.sessionOptions);
+  const settingsScopeId = resolveSessionSettingsScopeId(state);
   const selectedSettings = getSelectedSessionSettings(state);
   const selectedSessionId = String(state?.selectedSessionId ?? '').trim();
   const sessionBusy = isSessionBusy(state, selectedSessionId);
   const approvalPending = approvalUiState?.approvalModePending === true;
   const sessionSettingsPending =
     sessionSettingsUiState?.pending === true &&
-    sessionSettingsUiState?.pendingThreadId === selectedSessionId;
+    sessionSettingsUiState?.pendingThreadId === settingsScopeId;
   const sessionSettingsDisabled =
-    sessionSettingsPending || !canEditSessionSettings(state, selectedSessionId);
+    sessionSettingsPending || !canEditSessionSettings(state, settingsScopeId);
   const approvalDisabled = approvalPending || sessionBusy;
   const agentType = resolveCurrentAgentType(sessionOptions, selectedSettings);
   const agentTypeValueLabel = resolveSessionOptionLabel(sessionOptions.agentTypeOptions, agentType);

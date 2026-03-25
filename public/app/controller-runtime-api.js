@@ -12,6 +12,7 @@ import {
   getSelectedSessionSettings,
   normalizeApprovalMode,
   normalizeSessionSettings,
+  resolveSessionSettingsScopeId,
 } from './session-utils.js';
 
 export function createRuntimeControllerApi(ctx) {
@@ -158,7 +159,9 @@ export function createRuntimeControllerApi(ctx) {
       }
     },
     async setSessionSettings(sessionId = ctx.state.selectedSessionId, settings) {
-      const targetSessionId = String(sessionId ?? '').trim();
+      const targetSessionId = String(
+        sessionId ?? resolveSessionSettingsScopeId(ctx.state) ?? '',
+      ).trim();
       if (
         !targetSessionId ||
         ctx.sessionSettingsRequestInFlight ||
@@ -176,6 +179,14 @@ export function createRuntimeControllerApi(ctx) {
         previousSettings.sandboxMode === nextSettings.sandboxMode
       ) {
         return previousSettings;
+      }
+
+      if (targetSessionId.startsWith('project:')) {
+        ctx.applyAction({
+          type: 'session_settings_changed',
+          payload: { threadId: targetSessionId, settings: nextSettings },
+        });
+        return nextSettings;
       }
 
       ctx.sessionSettingsRequestInFlight = true;

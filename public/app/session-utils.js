@@ -700,19 +700,39 @@ export function resolveSandboxModeLabel(sessionOptions, value) {
 }
 
 export function getSelectedSessionSettings(state) {
-  const sessionId = String(state?.selectedSessionId ?? '').trim();
+  const sessionId = String(resolveSessionSettingsScopeId(state) ?? '').trim();
   return normalizeSessionSettings(
     sessionId ? state?.sessionSettingsById?.[sessionId] : createInitialSessionSettings(),
   );
 }
 
 export function canEditSessionSettings(state, sessionId = state?.selectedSessionId) {
-  const targetSessionId = String(sessionId ?? '').trim();
+  const targetSessionId = String(
+    sessionId ?? resolveSessionSettingsScopeId(state) ?? '',
+  ).trim();
   if (!isAuthenticatedAppState(state) || !targetSessionId) {
     return false;
   }
 
+  if (targetSessionId.startsWith('project:')) {
+    return true;
+  }
+
   return !isSessionBusy(state, targetSessionId);
+}
+
+export function resolveSessionSettingsScopeId(state) {
+  const selectedSessionId = String(state?.selectedSessionId ?? '').trim();
+  if (selectedSessionId) {
+    return selectedSessionId;
+  }
+
+  const pendingProjectId = String(state?.pendingSessionProjectId ?? '').trim();
+  if (pendingProjectId) {
+    return `project:${pendingProjectId}`;
+  }
+
+  return null;
 }
 
 export function isSessionBusy(state, sessionId) {

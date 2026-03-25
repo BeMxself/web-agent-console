@@ -17,7 +17,10 @@ import {
   getPendingSessionProject,
   resolveSelectedSessionTitle,
 } from './project-utils.js';
-import { getSelectedSessionSettings } from './session-utils.js';
+import {
+  getSelectedSessionSettings,
+  resolveSessionSettingsScopeId,
+} from './session-utils.js';
 import {
   renderActivityPanel,
   getComposerSettingsScopeId,
@@ -398,15 +401,19 @@ export function renderApp(ctx) {
       }
     }
     const composerSettingsScopeId = getComposerSettingsScopeId(ctx.state);
+    const sessionSettingsScopeId = resolveSessionSettingsScopeId(ctx.state);
     const approvalControlsMarkup = getCachedMarkup(
       ctx.renderCache.approvalModeControls,
       [
         authLocked,
         mobileViewport,
         ctx.state.selectedSessionId,
+        ctx.state.pendingSessionProjectId,
+        composerSettingsScopeId,
+        sessionSettingsScopeId,
         ctx.state.approvalMode,
         ctx.state.sessionOptions,
-        ctx.state.sessionSettingsById[ctx.state.selectedSessionId] ?? null,
+        ctx.state.sessionSettingsById[sessionSettingsScopeId] ?? null,
         ctx.state.turnStatusBySession[ctx.state.selectedSessionId] ?? null,
         ctx.state.realtimeBySession[ctx.state.selectedSessionId] ?? null,
         ctx.state.composerSettingsCollapsedByScope[composerSettingsScopeId] ?? null,
