@@ -89,17 +89,26 @@
                     <button type="button" id="interrupt-button">中断</button>
                   </div>
                 </div>
-                <div class="composer-footer">
-                  <div id="approval-mode-controls" class="approval-mode-controls-slot"></div>
+              </div>
+              <div class="composer-footer">
+                <div id="approval-mode-controls" class="approval-mode-controls-slot"></div>
+                <div class="composer-footer-actions">
                   <label class="composer-nav-toggle composer-nav-toggle--subtle" title="显示导航跳转按钮">
                     <input id="conversation-nav-toggle" type="checkbox" checked />
                     <span class="sr-only">显示导航跳转按钮</span>
                     <span class="composer-nav-toggle-icon" aria-hidden="true"></span>
                   </label>
+                  <button
+                    type="button"
+                    id="composer-collapse-toggle"
+                    class="composer-collapse-toggle-button"
+                    data-collapsed="false"
+                    aria-label="压缩底栏"
+                    title="压缩底栏"
+                  >
+                    <span class="composer-collapse-toggle-icon" aria-hidden="true">⌄</span>
+                  </button>
                 </div>
-              </div>
-              <div class="composer-collapse-row">
-                <button type="button" id="composer-collapse-toggle" data-collapsed="false">压缩底栏</button>
               </div>
             </div>
           </form>

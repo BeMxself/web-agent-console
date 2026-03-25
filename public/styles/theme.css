@@ -598,7 +598,7 @@ body[data-theme="dark"] .dialog-input:focus {
 }
 
 .layout[data-theme="dark"] #interrupt-button,
-.layout[data-theme="dark"] #composer-collapse-toggle {
+.layout[data-theme="dark"] #composer #composer-collapse-toggle {
   border-color: rgba(159, 182, 203, 0.14);
   background: rgba(24, 38, 53, 0.92);
   color: #dce7f2;

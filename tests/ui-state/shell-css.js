@@ -599,15 +599,27 @@ test('composer control css keeps session selectors compact, uses an icon nav tog
   );
   assert.match(
     css,
-    /#composer\[data-collapsed="true"\]\s+\.composer-card\s*>\s*:not\(\.composer-collapse-row\)\s*\{[^}]*display:\s*none\s*!important;/s,
+    /\.composer-footer-actions\s*\{[^}]*display:\s*inline-flex;[^}]*justify-content:\s*flex-end;[^}]*margin-left:\s*auto;/s,
   );
   assert.match(
     css,
-    /#composer\[data-collapsed="true"\]\s+\.composer-collapse-row\s*\{[^}]*padding-top:\s*0;/s,
+    /#composer\s+#composer-collapse-toggle\s*\{[^}]*display:\s*inline-flex;[^}]*width:\s*34px;[^}]*height:\s*32px;[^}]*padding:\s*0;[^}]*border:\s*1px solid rgba\(17,\s*32,\s*49,\s*0\.1\);[^}]*background:\s*rgba\(255,\s*255,\s*255,\s*0\.96\);[^}]*color:\s*#39516a;/s,
   );
   assert.match(
     css,
-    /#composer\[data-collapsed="true"\]\s+#composer-collapse-toggle\[data-collapsed="true"\]\s*\{[^}]*width:\s*100%;/s,
+    /\.composer-collapse-toggle-icon\s*\{[^}]*display:\s*inline-flex;[^}]*font-size:\s*16px;/s,
+  );
+  assert.match(
+    css,
+    /#composer\[data-collapsed="true"\]\s+\.composer-collapse-content\s*\{[^}]*display:\s*none\s*!important;/s,
+  );
+  assert.match(
+    css,
+    /#composer\[data-collapsed="true"\]\s+\.composer-footer\s*\{[^}]*padding-top:\s*0;[^}]*border-top:\s*0;/s,
+  );
+  assert.match(
+    css,
+    /#composer\[data-collapsed="true"\]\s+#composer-collapse-toggle\[data-collapsed="true"\]\s*\{[^}]*margin-left:\s*auto;/s,
   );
   assert.match(
     css,
