@@ -230,6 +230,7 @@ export async function tryReconcileCompletedTranscript(service, threadId) {
 export async function runTurn(service, {
   activeTurn,
   abortController,
+  queryOptions = null,
   settings,
   startDeferred,
   turnRequestOrText,
@@ -256,6 +257,8 @@ export async function runTurn(service, {
         agentType: turnRequest.agentType,
       },
       sessionId: threadRecord.claudeSessionId,
+      forkSession: queryOptions?.forkSession === true,
+      resumeSessionAt: queryOptions?.resumeSessionAt ?? null,
       canUseTool: async (toolName, input, toolOptions = {}) => {
         const { result } = await service.requestToolApproval({
           threadId,

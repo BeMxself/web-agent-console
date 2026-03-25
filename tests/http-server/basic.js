@@ -245,6 +245,18 @@ test('http server returns grouped active and archived sessions from /api/session
         status: 'started',
       };
     },
+    async rewriteInPlaceFromQuestion(threadId, userMessageId, text) {
+      calls.push({ method: 'rewriteInPlaceFromQuestion', threadId, userMessageId, text });
+      return {
+        thread: {
+          id: threadId,
+          cwd: '/tmp/workspace-a',
+          name: 'Focused thread',
+        },
+        turnId: 'turn-rewrite',
+        status: 'started',
+      };
+    },
     subscribe() {
       return () => {};
     },
@@ -340,6 +352,16 @@ test('http server returns grouped active and archived sessions from /api/session
   assert.equal(branchBody.thread.id, 'thread-branch');
   assert.equal(branchBody.turnId, 'turn-branch');
 
+  const rewriteResponse = await fetch(`${baseUrl}/api/sessions/thread-1/rewrite`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ userMessageId: 'user-msg-1:0', text: 'Edited in place' }),
+  });
+  assert.equal(rewriteResponse.status, 202);
+  const rewriteBody = await rewriteResponse.json();
+  assert.equal(rewriteBody.thread.id, 'thread-1');
+  assert.equal(rewriteBody.turnId, 'turn-rewrite');
+
   assert.deepEqual(calls, [
     {
       method: 'addFocusedSession',
@@ -378,6 +400,12 @@ test('http server returns grouped active and archived sessions from /api/session
       threadId: 'thread-1',
       userMessageId: 'user-msg-1:0',
       text: 'Edited question',
+    },
+    {
+      method: 'rewriteInPlaceFromQuestion',
+      threadId: 'thread-1',
+      userMessageId: 'user-msg-1:0',
+      text: 'Edited in place',
     },
   ]);
 

@@ -100,3 +100,32 @@ test('codex provider forwards historical-question branching to the session servi
   });
   assert.deepEqual(calls, [['branchFromQuestion', 'thread-1', 'user-msg-2', 'Edited question']]);
 });
+
+test('codex provider forwards in-place rewrite requests when the session service supports them', async () => {
+  const calls = [];
+  const provider = new CodexProvider({
+    appServer: {},
+    client: {},
+    sessionService: {
+      async rewriteInPlaceFromQuestion(threadId, userMessageId, text) {
+        calls.push(['rewriteInPlaceFromQuestion', threadId, userMessageId, text]);
+        return {
+          thread: { id: threadId },
+          turnId: 'turn-rewrite',
+          status: 'started',
+        };
+      },
+    },
+    initializeParams: {},
+  });
+  provider.run = async (operation) => operation();
+
+  const result = await provider.rewriteInPlaceFromQuestion('thread-1', 'user-msg-2', 'Edited question');
+
+  assert.deepEqual(result, {
+    thread: { id: 'thread-1' },
+    turnId: 'turn-rewrite',
+    status: 'started',
+  });
+  assert.deepEqual(calls, [['rewriteInPlaceFromQuestion', 'thread-1', 'user-msg-2', 'Edited question']]);
+});

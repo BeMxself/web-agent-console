@@ -80,6 +80,10 @@ export class ProviderAdapter {
     throw createProviderNotImplementedError(this, 'branchFromQuestion');
   }
 
+  async rewriteInPlaceFromQuestion() {
+    throw createProviderNotImplementedError(this, 'rewriteInPlaceFromQuestion');
+  }
+
   async createSessionInProject() {
     throw createProviderNotImplementedError(this, 'createSessionInProject');
   }

@@ -255,11 +255,49 @@ export function getRewriteQuestionAction(state, question) {
     return { visible: true, disabled: true, title: '这个问题包含附件，暂不支持重写' };
   }
 
+  const capabilities = getRewriteCapabilities(state);
+  if (!capabilities.branch && !capabilities.inPlace) {
+    return { visible: false, disabled: true, title: '当前提供方暂不支持重写问题' };
+  }
+
   return {
     visible: true,
     disabled: false,
-    title: '重写这个问题，并在新会话中从该问题之前重新运行',
+    title: capabilities.inPlace
+      ? '重写这个问题，可选择在当前会话或新会话中从该问题之前重新运行'
+      : '重写这个问题，并在新会话中从该问题之前重新运行',
   };
+}
+
+export function getRewriteCapabilities(state) {
+  return normalizeSessionRewriteCapabilities(state?.sessionOptions?.rewriteCapabilities);
+}
+
+export function normalizeSessionRewriteCapabilities(capabilities) {
+  return {
+    branch: capabilities?.branch === true,
+    inPlace: capabilities?.inPlace === true,
+  };
+}
+
+export function canRewriteQuestionInPlace(thread, question) {
+  if (!thread || !question?.item?.id) {
+    return false;
+  }
+
+  for (const turn of thread.turns ?? []) {
+    for (const item of turn?.items ?? []) {
+      if (item?.id === question.item.id) {
+        return false;
+      }
+
+      if (String(item?.id ?? '').trim()) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function buildRewriteLastQuestionPrompt(thread, rewrittenText, metadata = {}) {
@@ -442,6 +480,7 @@ export function normalizeSessionOptions(options = null) {
   return {
     providerId: normalizeSessionProviderId(options?.providerId),
     attachmentCapabilities: normalizeSessionAttachmentCapabilities(options?.attachmentCapabilities),
+    rewriteCapabilities: normalizeSessionRewriteCapabilities(options?.rewriteCapabilities),
     modelOptions: normalizeSessionOptionList(options?.modelOptions),
     reasoningEffortOptions: normalizeSessionOptionList(options?.reasoningEffortOptions),
     agentTypeOptions: normalizeSessionAgentTypeOptions(options?.agentTypeOptions, defaults.agentType),

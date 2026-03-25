@@ -149,6 +149,7 @@ test('claude sdk provider forwards approval, pending-action, and session setting
         modelOptions: [{ value: '', label: '默认' }],
         reasoningEffortOptions: [{ value: '', label: '默认' }],
         agentTypeOptions: [{ value: 'Explore', label: 'Explore' }],
+        rewriteCapabilities: { branch: true, inPlace: true },
         defaults: { model: null, reasoningEffort: null, agentType: null },
       };
     },
@@ -183,6 +184,17 @@ test('claude sdk provider forwards approval, pending-action, and session setting
         status: 'started',
       };
     },
+    async rewriteInPlaceFromQuestion(threadId, userMessageId, text) {
+      calls.push(['rewriteInPlaceFromQuestion', threadId, userMessageId, text]);
+      return {
+        thread: {
+          id: threadId,
+          name: 'Focus thread',
+        },
+        turnId: 'turn-rewrite',
+        status: 'started',
+      };
+    },
   };
   const provider = new ClaudeSdkProvider({
     activityStore: {},
@@ -210,6 +222,7 @@ test('claude sdk provider forwards approval, pending-action, and session setting
     modelOptions: [{ value: '', label: '默认' }],
     reasoningEffortOptions: [{ value: '', label: '默认' }],
     agentTypeOptions: [{ value: 'Explore', label: 'Explore' }],
+    rewriteCapabilities: { branch: true, inPlace: true },
     defaults: { model: null, reasoningEffort: null, agentType: null },
   });
   assert.deepEqual(await provider.getSessionSettings('thread-1'), {
@@ -250,6 +263,17 @@ test('claude sdk provider forwards approval, pending-action, and session setting
       status: 'started',
     },
   );
+  assert.deepEqual(
+    await provider.rewriteInPlaceFromQuestion('thread-1', 'user-msg-1:0', 'Edited question'),
+    {
+      thread: {
+        id: 'thread-1',
+        name: 'Focus thread',
+      },
+      turnId: 'turn-rewrite',
+      status: 'started',
+    },
+  );
 
   assert.deepEqual(calls, [
     ['renameSession', 'thread-1', 'Renamed thread'],
@@ -262,6 +286,7 @@ test('claude sdk provider forwards approval, pending-action, and session setting
     ['denyRequest', 'approval-2'],
     ['resolvePendingAction', 'question-1', { response: 'continue' }],
     ['branchFromQuestion', 'thread-1', 'user-msg-1:0', 'Edited question'],
+    ['rewriteInPlaceFromQuestion', 'thread-1', 'user-msg-1:0', 'Edited question'],
   ]);
 });
 

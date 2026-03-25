@@ -29,15 +29,15 @@ import {
   readAttachmentTextContent,
 } from './file-preview-utils.js';
 import {
-  buildOptimisticUserContent,
-  buildRewriteLastQuestionPrompt,
   canInterruptTurn,
   canSendTurn,
+  canRewriteQuestionInPlace,
   createInitialSessionSettings,
   findLatestUserQuestion,
   findUserQuestionById,
   findConversationAttachment,
   getComposerAttachmentError,
+  getRewriteCapabilities,
   getRewriteQuestionAction,
   getRewriteLastQuestionAction,
   normalizeComposerAttachments,
@@ -1020,12 +1020,30 @@ export function createSessionControllerApi(ctx) {
         return null;
       }
 
+      const rewriteCapabilities = getRewriteCapabilities(ctx.state);
+      const availableModes = {
+        branch: rewriteCapabilities.branch,
+        inPlace:
+          rewriteCapabilities.inPlace && canRewriteQuestionInPlace(detail, selectedQuestion),
+      };
+      if (!availableModes.branch && !availableModes.inPlace) {
+        return null;
+      }
+
+      const primaryMode = availableModes.branch ? 'branch' : 'in-place';
+      const secondaryMode =
+        availableModes.branch && availableModes.inPlace
+          ? 'in-place'
+          : null;
+
       ctx.pendingRewriteQuestion = {
         sessionId: targetSessionId,
         projectId: project.id ?? project.cwd ?? detail.cwd,
         userMessageId: selectedQuestion.item.id,
         sourceTurnIndex: selectedQuestion.turnIndex,
         originalText: selectedQuestion.text,
+        primaryMode,
+        secondaryMode,
       };
 
       const titleNode = ctx.documentRef?.querySelector?.('#rewrite-dialog-session-title');
@@ -1038,6 +1056,8 @@ export function createSessionControllerApi(ctx) {
         input.value = selectedQuestion.text;
       }
 
+      syncRewriteDialogActions(ctx.documentRef, ctx.pendingRewriteQuestion);
+
       openDialog(ctx.documentRef?.querySelector?.('#rewrite-dialog'));
       input?.focus?.();
       input?.select?.();
@@ -1049,13 +1069,15 @@ export function createSessionControllerApi(ctx) {
       if (input) {
         input.value = '';
       }
+      syncRewriteDialogActions(ctx.documentRef, null);
       closeDialog(ctx.documentRef?.querySelector?.('#rewrite-dialog'));
       return null;
     },
-    async submitRewrittenQuestion(text) {
+    async submitRewrittenQuestion(text, mode = null) {
       const pendingRewrite = ctx.pendingRewriteQuestion;
       const normalizedText = String(text ?? '').trim();
-      if (!pendingRewrite || !normalizedText) {
+      const rewriteMode = mode ?? pendingRewrite?.primaryMode ?? null;
+      if (!pendingRewrite || !normalizedText || !rewriteMode) {
         return null;
       }
 
@@ -1064,8 +1086,12 @@ export function createSessionControllerApi(ctx) {
         return null;
       }
 
+      const requestPath =
+        rewriteMode === 'in-place'
+          ? `/api/sessions/${encodeURIComponent(pendingRewrite.sessionId)}/rewrite`
+          : `/api/sessions/${encodeURIComponent(pendingRewrite.sessionId)}/branch`;
       const created = await ctx.requestProtectedJson(
-        `/api/sessions/${encodeURIComponent(pendingRewrite.sessionId)}/branch`,
+        requestPath,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -1081,15 +1107,27 @@ export function createSessionControllerApi(ctx) {
 
       await ctx.controller.loadSessions();
       await ctx.controller.selectSession(created.thread.id);
-      ctx.applyAction({
-        type: 'user_turn_submitted',
-        payload: {
-          threadId: created.thread.id,
-          turnId: created.turnId,
-          text: normalizedText,
-          attachments: [],
-        },
-      });
+      if (rewriteMode === 'in-place') {
+        ctx.applyAction({
+          type: 'historical_question_rewrite_submitted',
+          payload: {
+            threadId: created.thread.id,
+            turnId: created.turnId,
+            sourceTurnIndex: pendingRewrite.sourceTurnIndex,
+            text: normalizedText,
+          },
+        });
+      } else {
+        ctx.applyAction({
+          type: 'user_turn_submitted',
+          payload: {
+            threadId: created.thread.id,
+            turnId: created.turnId,
+            text: normalizedText,
+            attachments: [],
+          },
+        });
+      }
       ctx.applyAction({
         type: 'turn_started',
         payload: { threadId: created.thread.id, turnId: created.turnId },
@@ -1118,4 +1156,36 @@ function normalizeWorkspaceFileBrowserPath(path, rootPath) {
   }
 
   return normalizedRootPath;
+}
+
+function syncRewriteDialogActions(documentRef, pendingRewriteQuestion) {
+  const primaryButton = documentRef?.querySelector?.('#rewrite-dialog-submit-primary');
+  const secondaryButton = documentRef?.querySelector?.('#rewrite-dialog-submit-secondary');
+
+  const primaryMode = pendingRewriteQuestion?.primaryMode ?? null;
+  const secondaryMode = pendingRewriteQuestion?.secondaryMode ?? null;
+
+  if (primaryButton) {
+    primaryButton.hidden = !primaryMode;
+    primaryButton.dataset.rewriteMode = primaryMode ?? '';
+    primaryButton.textContent = formatRewriteDialogButtonLabel(primaryMode, true);
+  }
+
+  if (secondaryButton) {
+    secondaryButton.hidden = !secondaryMode;
+    secondaryButton.dataset.rewriteMode = secondaryMode ?? '';
+    secondaryButton.textContent = formatRewriteDialogButtonLabel(secondaryMode, false);
+  }
+}
+
+function formatRewriteDialogButtonLabel(mode, primary) {
+  if (mode === 'in-place') {
+    return primary ? '在当前会话重跑' : '在当前会话重跑';
+  }
+
+  if (mode === 'branch') {
+    return primary ? '新开分支重跑' : '新开分支重跑';
+  }
+
+  return '';
 }

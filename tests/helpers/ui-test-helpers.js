@@ -102,7 +102,6 @@ export function createFakeDocument(options = {}) {
   const composerInlineFeedback = createFakeElement();
   const composerInput = createFakeElement({ value: '' });
   const approvalModeControls = createFakeElement();
-  const rewriteLastQuestionButton = createFakeElement({ dataset: {} });
   const composerCollapseToggle = createFakeElement({ dataset: {}, textContent: '压缩底栏' });
   const composerUploadFileButton = createFakeElement({ dataset: {} });
   const composerUploadFileAction = createFakeElement({ dataset: {} });
@@ -153,6 +152,8 @@ export function createFakeDocument(options = {}) {
   const rewriteDialogForm = createFakeElement();
   const rewriteDialogInput = createFakeElement({ value: '' });
   const rewriteDialogTitle = createFakeElement({ textContent: '当前会话' });
+  const rewriteDialogPrimaryButton = createFakeElement({ dataset: {}, textContent: '新开分支重跑' });
+  const rewriteDialogSecondaryButton = createFakeElement({ dataset: {}, textContent: '在当前会话重跑', hidden: true });
   let lastDownload = null;
   const body = {
     dataset: {},
@@ -186,7 +187,6 @@ export function createFakeDocument(options = {}) {
     ['#composer-inline-feedback', composerInlineFeedback],
     ['#composer-input', composerInput],
     ['#approval-mode-controls', approvalModeControls],
-    ['#rewrite-last-question-button', rewriteLastQuestionButton],
     ['#composer-collapse-toggle', composerCollapseToggle],
     ['#composer-upload-file', composerUploadFileButton],
     ['#composer-upload-file-action', composerUploadFileAction],
@@ -205,6 +205,8 @@ export function createFakeDocument(options = {}) {
     ['#rewrite-dialog-form', rewriteDialogForm],
     ['#rewrite-dialog-input', rewriteDialogInput],
     ['#rewrite-dialog-session-title', rewriteDialogTitle],
+    ['#rewrite-dialog-submit-primary', rewriteDialogPrimaryButton],
+    ['#rewrite-dialog-submit-secondary', rewriteDialogSecondaryButton],
   ]);
 
   wireConversationMetrics(conversationBody, conversationScroll);
@@ -215,7 +217,6 @@ export function createFakeDocument(options = {}) {
     composerAttachmentError,
     composerInlineFeedback,
     approvalModeControls,
-    rewriteLastQuestionButton,
     composerCollapseToggle,
     composerUploadFileButton,
     composerUploadFileAction,
@@ -252,7 +253,6 @@ export function createFakeDocument(options = {}) {
     composerInlineFeedback,
     composerInput,
     approvalModeControls,
-    rewriteLastQuestionButton,
     composerCollapseToggle,
     composerUploadFileButton,
     composerUploadFileAction,
@@ -271,6 +271,8 @@ export function createFakeDocument(options = {}) {
     rewriteDialogForm,
     rewriteDialogInput,
     rewriteDialogTitle,
+    rewriteDialogPrimaryButton,
+    rewriteDialogSecondaryButton,
     body,
     documentElement: { dataset: {} },
     defaultView: createFakeWindow({ mobile }),
@@ -513,7 +515,6 @@ function wireComposerMarkup({
   composerAttachmentError,
   composerInlineFeedback,
   approvalModeControls,
-  rewriteLastQuestionButton,
   composerCollapseToggle,
   composerUploadFileButton,
   composerUploadFileAction,
@@ -554,9 +555,6 @@ function wireComposerMarkup({
           : `<p id="composer-inline-feedback">${composerInlineFeedback.textContent}</p>`,
         approvalModeControls.hidden ? '' : approvalModeControls.innerHTML,
         `<input id="conversation-nav-toggle"${conversationNavToggle.checked ? ' checked' : ''} />`,
-        rewriteLastQuestionButton.hidden
-          ? ''
-          : `<button id="rewrite-last-question-button" data-action="${rewriteLastQuestionButton.dataset.action ?? ''}"${rewriteLastQuestionButton.disabled ? ' disabled' : ''}>${rewriteLastQuestionButton.textContent}</button>`,
         `<button id="send-button" data-action="${sendButton.dataset.action ?? ''}">${sendButton.textContent}</button>`,
         interruptButton.hidden
           ? ''

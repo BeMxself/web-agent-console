@@ -18,6 +18,10 @@ export const DEFAULT_SESSION_OPTIONS = Object.freeze({
     acceptedMimePatterns: Object.freeze(['image/*']),
     supportsNonImageFiles: false,
   }),
+  rewriteCapabilities: Object.freeze({
+    branch: false,
+    inPlace: false,
+  }),
   modelOptions: Object.freeze([
     Object.freeze({ value: '', label: '默认' }),
     Object.freeze({ value: 'gpt-5.4', label: 'gpt-5.4' }),
@@ -325,6 +329,10 @@ export function cloneSessionOptions(options) {
     };
   }
 
+  if (options && Object.prototype.hasOwnProperty.call(options, 'rewriteCapabilities')) {
+    cloned.rewriteCapabilities = normalizeRewriteCapabilities(options?.rewriteCapabilities);
+  }
+
   const runtimeContext = normalizeRuntimeContext(options?.runtimeContext);
   if (runtimeContext) {
     cloned.runtimeContext = runtimeContext;
@@ -357,6 +365,13 @@ export function normalizeAttachmentCapabilities(capabilities) {
     maxBytesPerAttachment,
     acceptedMimePatterns,
     supportsNonImageFiles: Boolean(capabilities?.supportsNonImageFiles),
+  };
+}
+
+export function normalizeRewriteCapabilities(capabilities) {
+  return {
+    branch: Boolean(capabilities?.branch),
+    inPlace: Boolean(capabilities?.inPlace),
   };
 }
 

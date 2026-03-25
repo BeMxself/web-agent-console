@@ -342,6 +342,10 @@ test('http server exposes session options and session settings routes', async ()
           acceptedMimePatterns: ['image/*'],
           supportsNonImageFiles: false,
         },
+        rewriteCapabilities: {
+          branch: true,
+          inPlace: false,
+        },
         modelOptions: [
           { value: '', label: '默认' },
           { value: 'gpt-5.4', label: 'gpt-5.4' },
@@ -399,6 +403,10 @@ test('http server exposes session options and session settings routes', async ()
       maxBytesPerAttachment: 20 * 1024 * 1024,
       acceptedMimePatterns: ['image/*'],
       supportsNonImageFiles: false,
+    },
+    rewriteCapabilities: {
+      branch: true,
+      inPlace: false,
     },
     modelOptions: [
       { value: '', label: '默认' },

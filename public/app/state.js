@@ -667,6 +667,26 @@ export function reduceState(state = initialState, action) {
           ),
         })),
       );
+    case 'historical_question_rewrite_submitted':
+      return updateSessionThread(state, action.payload.threadId, (thread) => ({
+        ...thread,
+        updatedAt: Math.floor(Date.now() / 1000),
+        turns: [
+          ...(thread.turns ?? []).slice(0, Math.max(0, action.payload.sourceTurnIndex)),
+          {
+            id: action.payload.turnId,
+            status: 'started',
+            error: null,
+            items: [
+              {
+                type: 'userMessage',
+                id: `user-${action.payload.turnId}`,
+                content: buildOptimisticUserContent(action.payload.text, []),
+              },
+            ],
+          },
+        ],
+      }));
     case 'turn_started':
       return updateSessionThread(markSessionUnreadIfBackground({
         ...state,

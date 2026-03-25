@@ -145,6 +145,10 @@ test('session option cloning preserves provider metadata', () => {
       acceptedMimePatterns: ['image/*'],
       supportsNonImageFiles: false,
     },
+    rewriteCapabilities: {
+      branch: true,
+      inPlace: false,
+    },
     modelOptions: [{ value: '', label: 'default' }],
     reasoningEffortOptions: [{ value: '', label: 'default' }],
     defaults: {
@@ -164,6 +168,10 @@ test('session option cloning preserves provider metadata', () => {
       maxBytesPerAttachment: 20 * 1024 * 1024,
       acceptedMimePatterns: ['image/*'],
       supportsNonImageFiles: false,
+    },
+    rewriteCapabilities: {
+      branch: true,
+      inPlace: false,
     },
     modelOptions: [{ value: '', label: 'default' }],
     reasoningEffortOptions: [{ value: '', label: 'default' }],
@@ -223,6 +231,10 @@ test('provider session option defaults include stable attachment capabilities', 
     acceptedMimePatterns: ['image/*'],
     supportsNonImageFiles: false,
   });
+  assert.deepEqual(codexOptions.rewriteCapabilities, {
+    branch: true,
+    inPlace: false,
+  });
   assert.deepEqual(codexOptions.runtimeContext, {
     sandboxMode: 'danger-full-access',
   });
@@ -234,6 +246,10 @@ test('provider session option defaults include stable attachment capabilities', 
     acceptedMimePatterns: ['image/*', 'text/*', 'application/pdf'],
     supportsNonImageFiles: true,
   });
+  assert.deepEqual(claudeOptions.rewriteCapabilities, {
+    branch: true,
+    inPlace: true,
+  });
   assert.equal(claudeOptions.runtimeContext ?? null, null);
 
   assert.equal(agentOptions.providerId, 'agentapi');
@@ -242,6 +258,10 @@ test('provider session option defaults include stable attachment capabilities', 
     maxBytesPerAttachment: 0,
     acceptedMimePatterns: [],
     supportsNonImageFiles: false,
+  });
+  assert.deepEqual(agentOptions.rewriteCapabilities, {
+    branch: false,
+    inPlace: false,
   });
   assert.equal(agentOptions.runtimeContext ?? null, null);
 });
@@ -284,6 +304,8 @@ test('codex and claude providers expose the same app-level session contract thro
     'addProject',
     'closeProject',
     'renameSession',
+    'branchFromQuestion',
+    'rewriteInPlaceFromQuestion',
     'createSessionInProject',
     'getApprovalMode',
     'setApprovalMode',

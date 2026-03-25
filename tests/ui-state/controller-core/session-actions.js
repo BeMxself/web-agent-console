@@ -225,6 +225,7 @@ test('browser app keeps add-project input focus, caret, and body scroll stable a
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
 
   const openPromise = app.openProjectDialog();
@@ -356,6 +357,7 @@ test('browser app posts pending question responses through the pending-action ro
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
   assert.match(fakeDocument.conversationBody.innerHTML, /需要用户回答/);
   assert.match(fakeDocument.conversationBody.innerHTML, /data-pending-action-submit="question-1"/);
@@ -670,6 +672,7 @@ test('browser app restores an interrupted turn locally when the backend only ret
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
 
   app.setComposerDraft('');
@@ -831,6 +834,7 @@ test('browser app can collapse and restore the composer without losing the curre
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
 
   app.setComposerDraft('keep this draft');
@@ -942,6 +946,7 @@ test('browser app keeps add-project dialog draft state separate from the workspa
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
   await app.selectActivityPanelTab('files');
   assert.equal(app.getState().fileBrowser.currentPath, '/tmp/workspace-a');
@@ -1069,6 +1074,7 @@ test('browser app preserves a newer manual project dialog draft when the initial
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
 
   const openPromise = app.openProjectDialog();
@@ -1201,6 +1207,7 @@ test('browser app does not refetch the project dialog browse directory when manu
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
   await app.openProjectDialog();
 
@@ -1315,6 +1322,7 @@ test('browser app ignores stale out-of-order project dialog directory responses'
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
   await app.openProjectDialog();
 
@@ -1434,6 +1442,7 @@ test('browser app ignores stale project dialog directory responses after close a
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
   await app.openProjectDialog();
 
@@ -1811,6 +1820,11 @@ test('browser app rewrites the last question into a branched session rerun', asy
 
       if (url === '/api/session-options') {
         return jsonResponse({
+          providerId: 'claude-sdk',
+          rewriteCapabilities: {
+            branch: true,
+            inPlace: true,
+          },
           modelOptions: [{ value: 'gpt-5.4', label: 'gpt-5.4' }],
           reasoningEffortOptions: [{ value: 'high', label: 'high' }],
           defaults: { model: null, reasoningEffort: null },
@@ -1832,15 +1846,23 @@ test('browser app rewrites the last question into a branched session rerun', asy
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
 
-  assert.equal(fakeDocument.rewriteLastQuestionButton.hidden, false);
-  assert.equal(fakeDocument.rewriteLastQuestionButton.disabled, false);
-
-  fakeDocument.rewriteLastQuestionButton.click();
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-rewrite-user-message]', {
+      rewriteUserMessage: 'user-2',
+    }),
+  });
 
   assert.equal(fakeDocument.rewriteDialog.open, true);
   assert.equal(fakeDocument.rewriteDialogInput.value, 'Latest question');
+  assert.equal(fakeDocument.rewriteDialogPrimaryButton.hidden, false);
+  assert.equal(fakeDocument.rewriteDialogPrimaryButton.textContent, '新开分支重跑');
+  assert.equal(fakeDocument.rewriteDialogSecondaryButton.hidden, false);
+  assert.equal(fakeDocument.rewriteDialogSecondaryButton.textContent, '在当前会话重跑');
 
   fakeDocument.rewriteDialogInput.value = 'Edited question';
   fakeDocument.rewriteDialogForm.dispatchEvent({
@@ -1971,6 +1993,11 @@ test('browser app can rewrite from an arbitrary historical user question in the 
 
       if (url === '/api/session-options') {
         return jsonResponse({
+          providerId: 'claude-sdk',
+          rewriteCapabilities: {
+            branch: true,
+            inPlace: true,
+          },
           modelOptions: [{ value: '', label: '默认' }],
           reasoningEffortOptions: [{ value: '', label: '默认' }],
           defaults: { model: null, reasoningEffort: null },
@@ -1992,6 +2019,7 @@ test('browser app can rewrite from an arbitrary historical user question in the 
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   await app.selectSession('thread-1');
 
   assert.match(fakeDocument.conversationBody.innerHTML, /data-rewrite-user-message="user-1"/);
@@ -2034,7 +2062,154 @@ test('browser app can rewrite from an arbitrary historical user question in the 
   });
 });
 
-test('browser app disables rewriting the last question when it contains attachments', async () => {
+test('browser app can rewrite in place from a historical user question when the provider supports it', async () => {
+  const requests = [];
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread', cwd: '/tmp/workspace-a' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'userMessage',
+                    id: 'user-1',
+                    content: [{ type: 'text', text: 'Original question', text_elements: [] }],
+                  },
+                  { type: 'agentMessage', id: 'agent-1', text: 'Original answer' },
+                ],
+              },
+              {
+                id: 'turn-2',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'userMessage',
+                    id: 'user-2',
+                    content: [{ type: 'text', text: 'Latest question', text_elements: [] }],
+                  },
+                  { type: 'agentMessage', id: 'agent-2', text: 'Latest answer' },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/rewrite' && options.method === 'POST') {
+        requests.push({
+          url,
+          method: options.method,
+          body: JSON.parse(options.body),
+        });
+        return jsonResponse(
+          {
+            thread: {
+              id: 'thread-1',
+              name: 'Focus thread',
+              cwd: '/tmp/workspace-a',
+            },
+            turnId: 'turn-rewrite',
+            status: 'started',
+          },
+          202,
+        );
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'claude-sdk',
+          rewriteCapabilities: {
+            branch: true,
+            inPlace: true,
+          },
+          modelOptions: [{ value: '', label: '默认' }],
+          reasoningEffortOptions: [{ value: '', label: '默认' }],
+          defaults: { model: null, reasoningEffort: null },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: null,
+          reasoningEffort: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-rewrite-user-message]', {
+      rewriteUserMessage: 'user-2',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(fakeDocument.rewriteDialogSecondaryButton.hidden, false);
+
+  fakeDocument.rewriteDialogInput.value = 'Edited latest question';
+  fakeDocument.rewriteDialogSecondaryButton.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(app.getState().selectedSessionId, 'thread-1');
+  assert.equal(app.getState().turnStatusBySession['thread-1'], 'started');
+  assert.match(fakeDocument.conversationBody.innerHTML, /Edited latest question/);
+  assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, /Latest question/);
+  assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, /Latest answer/);
+  assert.deepEqual(requests[0].body, {
+    userMessageId: 'user-2',
+    text: 'Edited latest question',
+  });
+});
+
+test('browser app hides rewrite actions for user questions that include attachments', async () => {
   const fakeDocument = createFakeDocument();
   const app = createAppController({
     fetchImpl: async (url) => {
@@ -2094,6 +2269,11 @@ test('browser app disables rewriting the last question when it contains attachme
 
       if (url === '/api/session-options') {
         return jsonResponse({
+          providerId: 'claude-sdk',
+          rewriteCapabilities: {
+            branch: true,
+            inPlace: true,
+          },
           modelOptions: [{ value: '', label: '默认' }],
           reasoningEffortOptions: [{ value: '', label: '默认' }],
           defaults: { model: null, reasoningEffort: null },
@@ -2117,10 +2297,7 @@ test('browser app disables rewriting the last question when it contains attachme
   await app.loadSessions();
   await app.selectSession('thread-1');
 
-  assert.equal(fakeDocument.rewriteLastQuestionButton.hidden, false);
-  assert.equal(fakeDocument.rewriteLastQuestionButton.disabled, true);
-  assert.match(fakeDocument.rewriteLastQuestionButton.title, /附件/);
-  fakeDocument.rewriteLastQuestionButton.click();
+  assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, /data-rewrite-user-message=/);
   assert.equal(fakeDocument.rewriteDialog.open, false);
 });
 

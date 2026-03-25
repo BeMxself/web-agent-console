@@ -321,16 +321,6 @@ body[data-theme="dark"] .auth-theme-toggle:hover {
   color: #f5f8fb;
 }
 
-.layout[data-theme="dark"] #rewrite-last-question-button {
-  background: rgba(159, 182, 203, 0.12) !important;
-  color: #dce7f2 !important;
-}
-
-.layout[data-theme="dark"] #rewrite-last-question-button:disabled {
-  background: rgba(159, 182, 203, 0.08) !important;
-  color: #7f97ae !important;
-}
-
 .layout[data-theme="dark"] .sidebar-logout-button {
   border-color: rgba(216, 115, 109, 0.18);
   background: rgba(73, 29, 28, 0.44);

@@ -446,6 +446,10 @@ test('session service exposes session options and persists per-session settings'
       { value: 'workspace-write', label: '工作区可写' },
       { value: 'danger-full-access', label: '完全访问' },
     ]);
+    assert.deepEqual(options.rewriteCapabilities, {
+      branch: true,
+      inPlace: false,
+    });
     assert.deepEqual(options.runtimeContext, {
       sandboxMode: 'danger-full-access',
     });

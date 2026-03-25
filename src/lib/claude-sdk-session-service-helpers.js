@@ -160,7 +160,15 @@ export function buildSessionLookupOptions(threadRecord) {
   return threadRecord?.projectId ? { dir: threadRecord.projectId } : {};
 }
 
-export function buildQueryOptions({ abortController, canUseTool, cwd, settings, sessionId }) {
+export function buildQueryOptions({
+  abortController,
+  canUseTool,
+  cwd,
+  settings,
+  sessionId,
+  forkSession = false,
+  resumeSessionAt = null,
+}) {
   const options = {
     abortController,
     canUseTool,
@@ -171,6 +179,14 @@ export function buildQueryOptions({ abortController, canUseTool, cwd, settings, 
 
   if (sessionId) {
     options.resume = sessionId;
+  }
+
+  if (forkSession) {
+    options.forkSession = true;
+  }
+
+  if (resumeSessionAt) {
+    options.resumeSessionAt = resumeSessionAt;
   }
 
   if (settings?.model) {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import {
+  forkSession,
   getSessionInfo,
   getSessionMessages,
   listSessions,
@@ -89,7 +90,10 @@ import {
   compareProjects,
   normalizeClaudeAgentTypeOptions,
 } from './claude-sdk-session-service-helpers.js';
-import { extractProviderMessageId } from './thread-branching.js';
+import {
+  extractProviderMessageId,
+  findPreviousProviderMessageId,
+} from './thread-branching.js';
 
 import {
   ingestExternalBridgeEvent,
@@ -128,6 +132,7 @@ const DEFAULT_CLAUDE_SDK = Object.freeze({
   listSessions,
   getSessionInfo,
   getSessionMessages,
+  forkSession,
   renameSession,
 });
 
@@ -194,6 +199,10 @@ export class ClaudeSdkSessionService extends SessionService {
     if (agentTypeOptions.length > 0) {
       options.agentTypeOptions = agentTypeOptions;
     }
+    options.rewriteCapabilities = {
+      branch: typeof this.claudeSdk.forkSession === 'function',
+      inPlace: typeof this.claudeSdk.query === 'function',
+    };
     return options;
   }
 
@@ -329,6 +338,39 @@ export class ClaudeSdkSessionService extends SessionService {
     throw new Error('Claude historical branching fallback is not implemented without native forkSession support');
   }
 
+  async rewriteInPlaceFromQuestion(threadId, userMessageId, text) {
+    await this.ensureRuntimeStoreLoaded();
+    const threadRecord = await this.sessionIndex.readThread(threadId);
+    if (!threadRecord) {
+      throw new Error(`Claude thread not found: ${threadId}`);
+    }
+    if (!threadRecord.claudeSessionId) {
+      throw new Error('Claude session is not ready for in-place rewrite yet');
+    }
+
+    const detail = await this.loadTranscriptThread(threadRecord);
+    const resumeSessionAt = findPreviousProviderMessageId(detail.thread, userMessageId);
+    if (!resumeSessionAt) {
+      throw new Error('Claude 当前还不能直接在本会话重写第一条问题，请使用新开分支重跑');
+    }
+
+    const sourceSettings = await this.getSessionSettings(threadId);
+    return await this.startTurnWithQueryOptions(
+      threadId,
+      {
+        text,
+        model: sourceSettings?.model ?? null,
+        reasoningEffort: sourceSettings?.reasoningEffort ?? null,
+        agentType: sourceSettings?.agentType ?? null,
+        attachments: [],
+      },
+      sourceSettings,
+      {
+        resumeSessionAt,
+      },
+    );
+  }
+
   async readSession(threadId) {
     await this.ensureRuntimeStoreLoaded();
     const threadRecord = await this.sessionIndex.readThread(threadId);
@@ -350,6 +392,10 @@ export class ClaudeSdkSessionService extends SessionService {
   }
 
   async startTurn(threadId, turnRequestOrText, settings = null) {
+    return await this.startTurnWithQueryOptions(threadId, turnRequestOrText, settings);
+  }
+
+  async startTurnWithQueryOptions(threadId, turnRequestOrText, settings = null, queryOptions = null) {
     await this.ensureRuntimeStoreLoaded();
     const threadRecord = await this.sessionIndex.readThread(threadId);
     if (!threadRecord) {
@@ -395,6 +441,7 @@ export class ClaudeSdkSessionService extends SessionService {
     void this.runTurn({
       activeTurn,
       abortController,
+      queryOptions,
       settings,
       startDeferred,
       turnRequestOrText,

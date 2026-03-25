@@ -319,17 +319,6 @@
   background: #112031;
 }
 
-#rewrite-last-question-button {
-  background: rgba(17, 32, 49, 0.08) !important;
-  color: #22384f !important;
-}
-
-#rewrite-last-question-button:disabled {
-  background: rgba(17, 32, 49, 0.05) !important;
-  color: #8091a2 !important;
-  cursor: not-allowed;
-}
-
 #interrupt-button {
   background: rgba(17, 32, 49, 0.08);
   color: #22384f;

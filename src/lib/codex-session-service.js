@@ -91,6 +91,10 @@ export class CodexSessionService extends SessionService {
       sessionOptions: {
         ...DEFAULT_SESSION_OPTIONS,
         attachmentCapabilities: CODEX_ATTACHMENT_CAPABILITIES,
+        rewriteCapabilities: {
+          branch: true,
+          inPlace: false,
+        },
         sandboxModeOptions: CODEX_SANDBOX_MODE_OPTIONS,
         agentTypeOptions: CODEX_AGENT_TYPE_OPTIONS,
         defaults: {

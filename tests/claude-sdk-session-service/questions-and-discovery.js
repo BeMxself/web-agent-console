@@ -555,6 +555,106 @@ test('interruptTurn aborts the live Claude query through the supplied AbortContr
   }
 });
 
+test('rewriteInPlaceFromQuestion resumes a Claude session from the message before the edited question', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'claude-session-service-rewrite-in-place-'));
+  const filePath = join(tempDir, 'claude-session-index.json');
+  const runtimeStorePath = join(tempDir, 'claude-runtime-store.json');
+  const fakeClaudeSdk = createFakeClaudeSdk({
+    sessionInfoById: {
+      'claude-session-1': {
+        sessionId: 'claude-session-1',
+        summary: 'Focus thread',
+        createdAt: Date.now() - 10_000,
+        lastModified: Date.now(),
+      },
+    },
+    sessionMessagesById: {
+      'claude-session-1': [
+        {
+          type: 'user',
+          uuid: 'user-msg-1',
+          message: {
+            content: [{ type: 'text', text: 'First question' }],
+          },
+        },
+        {
+          type: 'assistant',
+          uuid: 'assistant-msg-1',
+          message: {
+            content: [{ type: 'text', text: 'First answer' }],
+          },
+        },
+        {
+          type: 'user',
+          uuid: 'user-msg-2',
+          message: {
+            content: [{ type: 'text', text: 'Second question' }],
+          },
+        },
+        {
+          type: 'assistant',
+          uuid: 'assistant-msg-2',
+          message: {
+            content: [{ type: 'text', text: 'Second answer' }],
+          },
+        },
+      ],
+    },
+    queryResponseFactories: [
+      ({ options }) => ({
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'system',
+            subtype: 'init',
+            session_id: options.resume,
+          };
+          yield createSuccessResultMessage({
+            sessionId: options.resume,
+            uuid: 'result-rewrite-1',
+            result: 'Done',
+          });
+        },
+      }),
+    ],
+  });
+  const sessionIndex = new ClaudeSdkSessionIndex({ filePath });
+  const runtimeStore = new RuntimeStore({ filePath: runtimeStorePath });
+  const service = new ClaudeSdkSessionService({
+    activityStore: createSnapshottingActivityStore(),
+    claudeSdk: fakeClaudeSdk,
+    runtimeStore,
+    cwd: '/tmp/default-cwd',
+    sessionIndex,
+  });
+
+  try {
+    await sessionIndex.upsertThread({
+      threadId: 'thread-1',
+      projectId: '/tmp/workspace-a',
+      claudeSessionId: 'claude-session-1',
+      summary: 'Focus thread',
+      updatedAt: 10,
+      createdAt: 9,
+    });
+
+    const result = await service.rewriteInPlaceFromQuestion(
+      'thread-1',
+      'user-msg-2:0',
+      'Edited second question',
+    );
+
+    assert.equal(fakeClaudeSdk.calls.query.length, 1);
+    assert.equal(fakeClaudeSdk.calls.query[0].options.resume, 'claude-session-1');
+    assert.equal(fakeClaudeSdk.calls.query[0].options.resumeSessionAt, 'assistant-msg-1');
+    const firstPromptMessage = await readFirstPromptMessage(fakeClaudeSdk.calls.query[0].prompt);
+    assert.equal(firstPromptMessage.message.content[0].text, 'Edited second question');
+    assert.equal(result.thread.id, 'thread-1');
+    assert.equal(result.turnId.startsWith('turn-'), true);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
 test('Claude project listing augments the app index with discovered Claude sessions from known projects', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'claude-project-listing-'));
   const filePath = join(tempDir, 'claude-session-index.json');

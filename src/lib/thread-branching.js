@@ -74,6 +74,28 @@ export function extractProviderMessageId(userMessageId) {
   return normalized.split(':', 1)[0] || normalized;
 }
 
+export function findPreviousProviderMessageId(thread, userMessageId) {
+  const normalizedTarget = String(userMessageId ?? '').trim();
+  if (!normalizedTarget) {
+    return null;
+  }
+
+  let previousItemId = null;
+  for (const turn of thread?.turns ?? []) {
+    for (const item of turn?.items ?? []) {
+      if (item?.id && matchesUserMessageId(item.id, normalizedTarget)) {
+        return extractProviderMessageId(previousItemId);
+      }
+
+      if (item?.id) {
+        previousItemId = item.id;
+      }
+    }
+  }
+
+  return null;
+}
+
 function matchesUserMessageId(itemId, expectedId) {
   const normalizedItemId = String(itemId ?? '').trim();
   if (!normalizedItemId) {

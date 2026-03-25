@@ -79,6 +79,12 @@ export class CodexProvider extends ProviderAdapter {
     return await this.run(() => this.sessionService.branchFromQuestion(threadId, userMessageId, text));
   }
 
+  async rewriteInPlaceFromQuestion(threadId, userMessageId, text) {
+    return await this.run(() =>
+      this.sessionService.rewriteInPlaceFromQuestion(threadId, userMessageId, text),
+    );
+  }
+
   async createSessionInProject(projectId) {
     return await this.run(() => this.sessionService.createSessionInProject(projectId));
   }

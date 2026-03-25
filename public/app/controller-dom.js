@@ -316,7 +316,6 @@ export function renderApp(ctx) {
     const composerImageInput = ctx.documentRef.querySelector('#composer-image-input');
     const composerCollapseToggle = ctx.documentRef.querySelector('#composer-collapse-toggle');
     const conversationNavToggle = ctx.documentRef.querySelector('#conversation-nav-toggle');
-    const rewriteLastQuestionButton = ctx.documentRef.querySelector('#rewrite-last-question-button');
     const sendButton = ctx.documentRef.querySelector('#send-button');
     const interruptButton = ctx.documentRef.querySelector('#interrupt-button');
     const composer = ctx.documentRef.querySelector('#composer');
@@ -370,7 +369,7 @@ export function renderApp(ctx) {
     syncComposerAttachmentError(composerAttachmentError, ctx.state);
     syncComposerInlineFeedback(composerInlineFeedback, ctx.state);
     syncConversationNavToggle(conversationNavToggle, ctx.state.showConversationNav);
-    syncComposerButtons(sendButton, interruptButton, rewriteLastQuestionButton, ctx.state);
+    syncComposerButtons(sendButton, interruptButton, ctx.state);
     syncComposerAttachmentActions(
       composerUploadFileButton,
       composerUploadFileAction,
@@ -393,6 +392,9 @@ export function renderApp(ctx) {
         composerCollapseToggle.dataset.collapsed = String(collapsed);
       }
       const nextTitle = collapsed ? '展开底栏' : '压缩底栏';
+      if (composerCollapseToggle.textContent !== nextTitle) {
+        composerCollapseToggle.textContent = nextTitle;
+      }
       if (composerCollapseToggle.title !== nextTitle) {
         composerCollapseToggle.title = nextTitle;
       }
@@ -792,7 +794,6 @@ export function bindControllerDocumentEvents(ctx) {
     const composerFileInput = ctx.documentRef.querySelector('#composer-file-input');
     const composerImageInput = ctx.documentRef.querySelector('#composer-image-input');
     const composerCollapseToggle = ctx.documentRef.querySelector('#composer-collapse-toggle');
-    const rewriteLastQuestionButton = ctx.documentRef.querySelector('#rewrite-last-question-button');
     const interruptButton = ctx.documentRef.querySelector('#interrupt-button');
     const conversationBody = ctx.documentRef.querySelector('#conversation-body');
     const activityPanel = ctx.documentRef.querySelector('#activity-panel');
@@ -808,6 +809,8 @@ export function bindControllerDocumentEvents(ctx) {
     const rewriteDialog = ctx.documentRef.querySelector('#rewrite-dialog');
     const rewriteDialogForm = ctx.documentRef.querySelector('#rewrite-dialog-form');
     const rewriteDialogInput = ctx.documentRef.querySelector('#rewrite-dialog-input');
+    const rewriteDialogPrimaryButton = ctx.documentRef.querySelector('#rewrite-dialog-submit-primary');
+    const rewriteDialogSecondaryButton = ctx.documentRef.querySelector('#rewrite-dialog-submit-secondary');
     const projectPanelToggle = ctx.documentRef.querySelector('#project-panel-toggle');
     const activityPanelToggle = ctx.documentRef.querySelector('#activity-panel-toggle');
     const conversationNavToggle = ctx.documentRef.querySelector('#conversation-nav-toggle');
@@ -874,10 +877,6 @@ export function bindControllerDocumentEvents(ctx) {
 
     interruptButton?.addEventListener('click', () => {
       void ctx.controller.interruptTurn();
-    });
-
-    rewriteLastQuestionButton?.addEventListener('click', () => {
-      void ctx.controller.openRewriteDialog();
     });
 
     conversationBody?.addEventListener('click', (event) => {
@@ -1073,6 +1072,13 @@ export function bindControllerDocumentEvents(ctx) {
     rewriteDialogForm?.addEventListener('submit', (event) => {
       event.preventDefault();
       void ctx.controller.submitRewrittenQuestion(rewriteDialogInput?.value ?? '');
+    });
+
+    rewriteDialogSecondaryButton?.addEventListener('click', () => {
+      void ctx.controller.submitRewrittenQuestion(
+        rewriteDialogInput?.value ?? '',
+        rewriteDialogSecondaryButton.dataset.rewriteMode,
+      );
     });
   }
 }

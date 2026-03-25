@@ -69,6 +69,10 @@ test('Claude session service exposes session options and persists per-session se
         { value: 'Explore', label: 'Explore' },
         { value: 'Plan', label: 'Plan' },
       ],
+      rewriteCapabilities: {
+        branch: true,
+        inPlace: true,
+      },
       defaults: {
         model: null,
         reasoningEffort: null,

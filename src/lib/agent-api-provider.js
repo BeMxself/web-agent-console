@@ -155,6 +155,10 @@ export class AgentApiProvider extends ProviderAdapter {
     return cloneSessionOptions({
       providerId: this.providerId,
       attachmentCapabilities: AGENT_API_ATTACHMENT_CAPABILITIES,
+      rewriteCapabilities: {
+        branch: false,
+        inPlace: false,
+      },
       modelOptions: [],
       reasoningEffortOptions: [],
       defaults: {
