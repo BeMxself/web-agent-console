@@ -29,6 +29,7 @@ test('shell html removes the generic conversation title and renames panel contro
   assert.match(html, /id="session-dock-plan-summary"/);
   assert.match(html, /class="composer-action-row"/);
   assert.match(html, /class="composer-footer"/);
+  assert.match(html, /id="composer-collapse-toggle"/);
   assert.match(html, /data-composer-attach-trigger="true"/);
   assert.match(html, /id="composer-inline-feedback"/);
   assert.match(html, /<textarea id="composer-input" rows="1" placeholder="输入下一步请求"><\/textarea>/);
@@ -114,7 +115,7 @@ test('conversation status css renders a glowing header light with compact text i
   );
   assert.match(
     css,
-    /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.conversation-header\s*\{[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\);[^}]*grid-template-areas:\s*"project status"\s*"title title";/s,
+    /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.conversation-header\s*\{[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\) auto;[^}]*grid-template-areas:\s*"project title status";/s,
   );
 });
 
@@ -590,7 +591,23 @@ test('composer control css keeps session selectors compact, uses an icon nav tog
   );
   assert.match(
     css,
-    /#interrupt-button\s*\{[^}]*display:\s*none;/s,
+    /#interrupt-button\s*\{[^}]*background:\s*rgba\(17,\s*32,\s*49,\s*0\.08\);[^}]*color:\s*#22384f;/s,
+  );
+  assert.match(
+    css,
+    /#interrupt-button\[data-action="interrupting"\]\s*\{[^}]*background:\s*rgba\(182,\s*106,\s*22,\s*0\.12\);[^}]*color:\s*#9b743d;/s,
+  );
+  assert.match(
+    css,
+    /#composer\[data-collapsed="true"\]\s+\.composer-card\s*>\s*:not\(\.composer-collapse-row\)\s*\{[^}]*display:\s*none\s*!important;/s,
+  );
+  assert.match(
+    css,
+    /#composer\[data-collapsed="true"\]\s+\.composer-collapse-row\s*\{[^}]*padding-top:\s*0;/s,
+  );
+  assert.match(
+    css,
+    /#composer\[data-collapsed="true"\]\s+#composer-collapse-toggle\[data-collapsed="true"\]\s*\{[^}]*width:\s*100%;/s,
   );
   assert.match(
     css,

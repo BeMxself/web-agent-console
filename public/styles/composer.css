@@ -391,12 +391,10 @@
   }
 
   .conversation-header {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      "project status"
-      "title title";
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "project title status";
     justify-items: stretch;
-    align-items: start;
+    align-items: center;
     gap: 10px;
   }
 
@@ -623,3 +621,29 @@
     padding: 9px 10px;
     gap: 6px;
   }
+}
+
+.composer-collapse-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+#composer-collapse-toggle {
+  border: 1px solid rgba(17, 32, 49, 0.08);
+  border-radius: 12px;
+  background: rgba(17, 32, 49, 0.06);
+  color: #22384f;
+}
+
+#composer[data-collapsed="true"] .composer-card > :not(.composer-collapse-row) {
+  display: none !important;
+}
+
+#composer[data-collapsed="true"] .composer-collapse-row {
+  padding-top: 0;
+}
+
+#composer[data-collapsed="true"] #composer-collapse-toggle[data-collapsed="true"] {
+  width: 100%;
+}

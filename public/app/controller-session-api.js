@@ -320,12 +320,18 @@ export function createSessionControllerApi(ctx) {
       const draftAttachments = normalizeComposerAttachments(ctx.state.composerAttachments);
       let sessionId = ctx.state.selectedSessionId;
       if (!sessionId && ctx.state.pendingSessionProjectId) {
-        const created = await ctx.requestProtectedJson(
-          `/api/projects/${encodeURIComponent(ctx.state.pendingSessionProjectId)}/sessions`,
-          {
-            method: 'POST',
-          },
-        );
+        ctx.applyAction({ type: 'project_session_creation_started' });
+        let created = null;
+        try {
+          created = await ctx.requestProtectedJson(
+            `/api/projects/${encodeURIComponent(ctx.state.pendingSessionProjectId)}/sessions`,
+            {
+              method: 'POST',
+            },
+          );
+        } finally {
+          ctx.applyAction({ type: 'project_session_creation_finished' });
+        }
         if (!created?.thread?.id) {
           return null;
         }
@@ -399,10 +405,49 @@ export function createSessionControllerApi(ctx) {
         return null;
       }
 
-      ctx.applyAction({
-        type: 'turn_interrupt_requested',
-        payload: { threadId: sessionId, turnId },
-      });
+      if (result?.thread?.runtime) {
+        ctx.applyAction({
+          type: 'session_runtime_reconciled',
+          payload: {
+            threadId: sessionId,
+            runtime: result.thread.runtime,
+          },
+        });
+      } else if (result?.interrupted === true) {
+        const realtime = ctx.state.realtimeBySession[sessionId] ?? null;
+        ctx.applyAction({
+          type: 'session_runtime_reconciled',
+          payload: {
+            threadId: sessionId,
+            runtime: {
+              turnStatus: 'interrupted',
+              activeTurnId: null,
+              diff: ctx.state.diffBySession[sessionId] ?? null,
+              realtime: realtime
+                ? {
+                    ...realtime,
+                    status: 'interrupted',
+                    closeReason: realtime.closeReason ?? '中断当前回合',
+                  }
+                : {
+                    status: 'interrupted',
+                    sessionId: null,
+                    items: [],
+                    audioChunkCount: 0,
+                    audioByteCount: 0,
+                    lastAudio: null,
+                    lastError: null,
+                    closeReason: '中断当前回合',
+                  },
+            },
+          },
+        });
+      } else {
+        ctx.applyAction({
+          type: 'turn_interrupt_requested',
+          payload: { threadId: sessionId, turnId },
+        });
+      }
       return result;
     },
     openHistoryDialog(projectId) {
@@ -529,6 +574,13 @@ export function createSessionControllerApi(ctx) {
     setComposerDraft(text) {
       ctx.applyAction({ type: 'composer_text_changed', payload: { text } });
       return ctx.state.composerDraft;
+    },
+    toggleComposerCollapsed(collapsed = !ctx.state.composerCollapsed) {
+      ctx.applyAction({
+        type: 'composer_visibility_toggled',
+        payload: { collapsed: Boolean(collapsed) },
+      });
+      return ctx.state.composerCollapsed;
     },
     async addComposerFiles(files) {
       const draftAttachments = [];

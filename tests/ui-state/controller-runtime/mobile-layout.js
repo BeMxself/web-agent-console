@@ -139,6 +139,20 @@ test('browser app syncs resizable sidebar widths and can hide the conversation n
         });
       }
 
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'codex',
+          modelOptions: [],
+          reasoningEffortOptions: [],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: null,
+            sandboxMode: null,
+          },
+        });
+      }
+
       if (url === '/api/status') {
         return jsonResponse({
           overall: 'connected',
@@ -528,6 +542,7 @@ test('browser app enables send only when a selected session has draft text and n
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
 
   assert.equal(fakeDocument.sendButton.disabled, true);
   assert.equal(fakeDocument.sendButton.textContent, '发送');
@@ -547,19 +562,74 @@ test('browser app enables send only when a selected session has draft text and n
   assert.equal(fakeDocument.sendButton.disabled, false);
   assert.equal(fakeDocument.sendButton.textContent, '发送');
 
+  assert.equal(fakeDocument.sendButton.disabled, false);
+  assert.equal(fakeDocument.sendButton.textContent, '发送');
+});
+
+test('browser app keeps send disabled for running claude-sdk sessions while leaving interrupt available', async () => {
+  const fakeDocument = createFakeDocument();
+  const fakeEventSource = createFakeEventSource();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'claude-sdk',
+          modelOptions: [],
+          reasoningEffortOptions: [],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: null,
+            sandboxMode: null,
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  app.setComposerDraft('ship it');
   fakeEventSource.emit({
     type: 'turn_started',
     payload: { threadId: 'thread-1', turnId: 'turn-2' },
   });
-  assert.equal(fakeDocument.sendButton.disabled, false);
-  assert.equal(fakeDocument.sendButton.textContent, '停止');
 
-  fakeEventSource.emit({
-    type: 'turn_completed',
-    payload: { threadId: 'thread-1', turnId: 'turn-2' },
-  });
-  assert.equal(fakeDocument.sendButton.disabled, false);
-  assert.equal(fakeDocument.sendButton.textContent, '发送');
+  assert.equal(fakeDocument.sendButton.disabled, true);
+  assert.equal(fakeDocument.sendButton.textContent, '执行中…');
+  assert.equal(fakeDocument.interruptButton.hidden, false);
 });
 
 test('browser app toggles project and activity panels from the conversation header', async () => {

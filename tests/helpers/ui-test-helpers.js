@@ -96,13 +96,14 @@ export function createFakeDocument(options = {}) {
   const conversationStatus = createFakeElement({ dataset: {} });
   const conversationTitle = createFakeElement({ textContent: '会话视图' });
   const sessionDockPlanSummary = createFakeElement();
-  const composer = createFakeElement();
+  const composer = createFakeElement({ dataset: {} });
   const composerAttachments = createFakeElement();
   const composerAttachmentError = createFakeElement();
   const composerInlineFeedback = createFakeElement();
   const composerInput = createFakeElement({ value: '' });
   const approvalModeControls = createFakeElement();
   const rewriteLastQuestionButton = createFakeElement({ dataset: {} });
+  const composerCollapseToggle = createFakeElement({ dataset: {}, textContent: '压缩底栏' });
   const composerUploadFileButton = createFakeElement({ dataset: {} });
   const composerUploadFileAction = createFakeElement({ dataset: {} });
   const composerUploadImageButton = createFakeElement({ dataset: {} });
@@ -186,6 +187,7 @@ export function createFakeDocument(options = {}) {
     ['#composer-input', composerInput],
     ['#approval-mode-controls', approvalModeControls],
     ['#rewrite-last-question-button', rewriteLastQuestionButton],
+    ['#composer-collapse-toggle', composerCollapseToggle],
     ['#composer-upload-file', composerUploadFileButton],
     ['#composer-upload-file-action', composerUploadFileAction],
     ['#composer-upload-image', composerUploadImageButton],
@@ -214,6 +216,7 @@ export function createFakeDocument(options = {}) {
     composerInlineFeedback,
     approvalModeControls,
     rewriteLastQuestionButton,
+    composerCollapseToggle,
     composerUploadFileButton,
     composerUploadFileAction,
     composerUploadImageButton,
@@ -250,6 +253,7 @@ export function createFakeDocument(options = {}) {
     composerInput,
     approvalModeControls,
     rewriteLastQuestionButton,
+    composerCollapseToggle,
     composerUploadFileButton,
     composerUploadFileAction,
     composerUploadImageButton,
@@ -510,6 +514,7 @@ function wireComposerMarkup({
   composerInlineFeedback,
   approvalModeControls,
   rewriteLastQuestionButton,
+  composerCollapseToggle,
   composerUploadFileButton,
   composerUploadFileAction,
   composerUploadImageButton,
@@ -555,7 +560,8 @@ function wireComposerMarkup({
         `<button id="send-button" data-action="${sendButton.dataset.action ?? ''}">${sendButton.textContent}</button>`,
         interruptButton.hidden
           ? ''
-          : `<button id="interrupt-button">${interruptButton.textContent}</button>`,
+          : `<button id="interrupt-button" data-action="${interruptButton.dataset.action ?? ''}">${interruptButton.textContent}</button>`,
+        `<button id="composer-collapse-toggle" data-collapsed="${composerCollapseToggle.dataset.collapsed ?? 'false'}">${composerCollapseToggle.textContent}</button>`,
       ].join('');
     },
     set(nextValue) {

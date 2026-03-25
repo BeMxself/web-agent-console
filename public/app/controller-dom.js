@@ -311,6 +311,7 @@ export function renderApp(ctx) {
     const composerAttachmentMenu = ctx.documentRef.querySelector('#composer-attachment-menu');
     const composerFileInput = ctx.documentRef.querySelector('#composer-file-input');
     const composerImageInput = ctx.documentRef.querySelector('#composer-image-input');
+    const composerCollapseToggle = ctx.documentRef.querySelector('#composer-collapse-toggle');
     const conversationNavToggle = ctx.documentRef.querySelector('#conversation-nav-toggle');
     const rewriteLastQuestionButton = ctx.documentRef.querySelector('#rewrite-last-question-button');
     const sendButton = ctx.documentRef.querySelector('#send-button');
@@ -377,6 +378,26 @@ export function renderApp(ctx) {
       ctx.state,
     );
     syncAuthGate(authGate, loginError, loginButton, loginPassword, logoutButton, ctx.state.auth);
+    if (composer?.dataset) {
+      const nextCollapsed = String(Boolean(ctx.state.composerCollapsed));
+      if (composer.dataset.collapsed !== nextCollapsed) {
+        composer.dataset.collapsed = nextCollapsed;
+      }
+    }
+    if (composerCollapseToggle) {
+      const collapsed = Boolean(ctx.state.composerCollapsed);
+      const nextLabel = collapsed ? '展开底栏' : '压缩底栏';
+      if (composerCollapseToggle.textContent !== nextLabel) {
+        composerCollapseToggle.textContent = nextLabel;
+      }
+      if (composerCollapseToggle.dataset?.collapsed !== String(collapsed)) {
+        composerCollapseToggle.dataset.collapsed = String(collapsed);
+      }
+      const nextTitle = collapsed ? '展开底栏' : '压缩底栏';
+      if (composerCollapseToggle.title !== nextTitle) {
+        composerCollapseToggle.title = nextTitle;
+      }
+    }
     const composerSettingsScopeId = getComposerSettingsScopeId(ctx.state);
     const approvalControlsMarkup = getCachedMarkup(
       ctx.renderCache.approvalModeControls,
@@ -764,6 +785,7 @@ export function bindControllerDocumentEvents(ctx) {
     const composerUploadImageButton = ctx.documentRef.querySelector('#composer-upload-image');
     const composerFileInput = ctx.documentRef.querySelector('#composer-file-input');
     const composerImageInput = ctx.documentRef.querySelector('#composer-image-input');
+    const composerCollapseToggle = ctx.documentRef.querySelector('#composer-collapse-toggle');
     const rewriteLastQuestionButton = ctx.documentRef.querySelector('#rewrite-last-question-button');
     const interruptButton = ctx.documentRef.querySelector('#interrupt-button');
     const conversationBody = ctx.documentRef.querySelector('#conversation-body');
@@ -828,6 +850,10 @@ export function bindControllerDocumentEvents(ctx) {
     composerUploadImageButton?.addEventListener('click', () => {
       ctx.controller.setComposerAttachmentMenuOpen(false);
       composerImageInput?.click?.();
+    });
+
+    composerCollapseToggle?.addEventListener('click', () => {
+      ctx.controller.toggleComposerCollapsed();
     });
 
     composerFileInput?.addEventListener('change', () => {

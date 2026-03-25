@@ -331,7 +331,8 @@
 }
 
 #interrupt-button {
-  display: none;
+  background: rgba(17, 32, 49, 0.08);
+  color: #22384f;
 }
 
 #send-button[data-action="interrupt"] {
@@ -342,6 +343,13 @@
 
 #send-button[data-action="interrupting"],
 #send-button[data-action="busy"] {
+  background: rgba(182, 106, 22, 0.12);
+  color: #9b743d;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+#interrupt-button[data-action="interrupting"] {
   background: rgba(182, 106, 22, 0.12);
   color: #9b743d;
   box-shadow: none;

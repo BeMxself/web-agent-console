@@ -13,6 +13,7 @@ import {
   getComposerAttachmentError,
   normalizeComposerAttachments,
   renderComposerAttachmentCard,
+  supportsLiveTurnFollowUp,
 } from './session-utils.js';
 import { renderParagraphList, renderTaskPlanStep } from './render-turn-items.js';
 
@@ -384,6 +385,8 @@ export function isComposerSettingsCollapsed(state, scopeId = getComposerSettings
 export function syncComposerButtons(sendButton, interruptButton, rewriteButton, state) {
   const primaryAction = resolveComposerPrimaryAction(state);
   const rewriteAction = getRewriteLastQuestionAction(state);
+  const sessionId = state.selectedSessionId;
+  const status = sessionId ? state.turnStatusBySession[sessionId] ?? 'idle' : 'idle';
 
   if (sendButton) {
     if (sendButton.textContent !== primaryAction.label) {
@@ -422,22 +425,26 @@ export function syncComposerButtons(sendButton, interruptButton, rewriteButton, 
   }
 
   if (interruptButton) {
-    if (!interruptButton.hidden) {
-      interruptButton.hidden = true;
+    const nextHidden = !(canInterruptTurn(state) || status === 'interrupting');
+    if (interruptButton.hidden !== nextHidden) {
+      interruptButton.hidden = nextHidden;
     }
-    if (!interruptButton.disabled) {
-      interruptButton.disabled = true;
+    const nextDisabled = status === 'interrupting' || !canInterruptTurn(state);
+    if (interruptButton.disabled !== nextDisabled) {
+      interruptButton.disabled = nextDisabled;
     }
-    if (interruptButton.textContent !== '中断') {
-      interruptButton.textContent = '中断';
+    const nextText = status === 'interrupting' ? '停止中…' : '中断';
+    if (interruptButton.textContent !== nextText) {
+      interruptButton.textContent = nextText;
     }
-    if (interruptButton.title !== '中断当前回合') {
-      interruptButton.title = '中断当前回合';
+    const nextTitle = status === 'interrupting' ? '正在停止当前回合' : '中断当前回合';
+    if (interruptButton.title !== nextTitle) {
+      interruptButton.title = nextTitle;
     }
     if (interruptButton.dataset) {
-      const nextInterruptable = String(primaryAction.kind === 'interrupt');
-      if (interruptButton.dataset.interruptable !== nextInterruptable) {
-        interruptButton.dataset.interruptable = nextInterruptable;
+      const nextAction = status === 'interrupting' ? 'interrupting' : 'interrupt';
+      if (interruptButton.dataset.action !== nextAction) {
+        interruptButton.dataset.action = nextAction;
       }
     }
   }
@@ -446,26 +453,27 @@ export function syncComposerButtons(sendButton, interruptButton, rewriteButton, 
 export function resolveComposerPrimaryAction(state) {
   const sessionId = state.selectedSessionId;
   const status = sessionId ? state.turnStatusBySession[sessionId] ?? 'idle' : 'idle';
-
-  if (canInterruptTurn(state)) {
-    return {
-      kind: 'interrupt',
-      label: '停止',
-      disabled: false,
-      title: '停止当前回合',
-    };
-  }
+  const liveFollowUp = supportsLiveTurnFollowUp(state);
 
   if (status === 'interrupting') {
     return {
-      kind: 'interrupting',
-      label: '停止中…',
+      kind: 'send',
+      label: '发送',
       disabled: true,
       title: '正在停止当前回合',
     };
   }
 
   if (status === 'started') {
+    if (liveFollowUp) {
+      const sendable = canSendTurn(state);
+      return {
+        kind: 'send',
+        label: '发送',
+        disabled: !sendable,
+        title: sendable ? '继续向当前会话发送输入' : '当前回合执行中，输入后可继续发送',
+      };
+    }
     return {
       kind: 'busy',
       label: '执行中…',

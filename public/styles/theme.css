@@ -597,6 +597,19 @@ body[data-theme="dark"] .dialog-input:focus {
   box-shadow: 0 14px 28px rgba(2, 8, 16, 0.36);
 }
 
+.layout[data-theme="dark"] #interrupt-button,
+.layout[data-theme="dark"] #composer-collapse-toggle {
+  border-color: rgba(159, 182, 203, 0.14);
+  background: rgba(24, 38, 53, 0.92);
+  color: #dce7f2;
+  box-shadow: none;
+}
+
+.layout[data-theme="dark"] #interrupt-button[data-action="interrupting"] {
+  background: rgba(182, 106, 22, 0.12);
+  color: #d9b07a;
+}
+
 .layout[data-theme="dark"] #composer .composer-attachment-menu button {
   border-color: rgba(159, 182, 203, 0.2) !important;
   color: #f5f9fd !important;

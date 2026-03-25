@@ -447,6 +447,20 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
         });
       }
 
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'codex',
+          modelOptions: [],
+          reasoningEffortOptions: [],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: null,
+            sandboxMode: null,
+          },
+        });
+      }
+
       if (url === '/api/sessions/thread-3') {
         return jsonResponse({
           thread: {
@@ -534,6 +548,7 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
   });
 
   await app.loadSessions();
+  await app.loadSessionOptions();
   assert.equal(fakeDocument.sendButton.textContent, '发送');
   assert.equal(fakeDocument.sendButton.disabled, true);
   assert.equal(fakeDocument.interruptButton.hidden, true);
@@ -578,18 +593,14 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
   assert.equal(fakeDocument.conversationScroll.scrollTop, 2048);
   await app.sendTurn('continue with the refactor');
   assert.equal(app.getState().composerDraft, '');
-  assert.equal(fakeDocument.sendButton.textContent, '停止');
-  assert.equal(fakeDocument.sendButton.disabled, false);
-  assert.equal(app.getState().turnStatusBySession['thread-1'], 'started');
-  assert.equal(fakeDocument.interruptButton.hidden, true);
-  await app.interruptTurn();
-  assert.equal(app.getState().turnStatusBySession['thread-1'], 'interrupting');
-  assert.equal(fakeDocument.sendButton.textContent, '停止中…');
+  assert.equal(fakeDocument.sendButton.textContent, '发送');
   assert.equal(fakeDocument.sendButton.disabled, true);
-  fakeEventSource.emit({
-    type: 'turn_completed',
-    payload: { threadId: 'thread-1', turnId: 'turn-2' },
-  });
+  assert.equal(app.getState().turnStatusBySession['thread-1'], 'started');
+  assert.equal(fakeDocument.interruptButton.hidden, false);
+  await app.interruptTurn();
+  assert.equal(app.getState().turnStatusBySession['thread-1'], 'interrupted');
+  assert.equal(fakeDocument.sendButton.textContent, '发送');
+  assert.equal(fakeDocument.sendButton.disabled, true);
   const secondInterrupt = await app.interruptTurn();
 
   assert.equal(app.getState().projects[1].id, '/tmp/workspace-b');
@@ -611,7 +622,236 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
   assert.equal(requests[2].body.threadId, 'thread-2');
   assert.match(requests[3].body.text, /refactor/);
   assert.equal(requests[4].body.turnId, 'turn-2');
-  assert.equal(app.getState().turnStatusBySession['thread-1'], 'completed');
+  assert.equal(app.getState().turnStatusBySession['thread-1'], 'interrupted');
+});
+
+test('browser app restores an interrupted turn locally when the backend only returns interrupted true', async () => {
+  const requests = [];
+  const fakeDocument = createFakeDocument();
+  const fakeEventSource = createFakeEventSource();
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Busy thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Busy thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/interrupt' && options.method === 'POST') {
+        requests.push({ url, method: options.method, body: JSON.parse(options.body) });
+        return jsonResponse({ interrupted: true }, 202);
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  app.setComposerDraft('');
+  fakeEventSource.emit({
+    type: 'turn_started',
+    payload: { threadId: 'thread-1', turnId: 'turn-2' },
+  });
+
+  assert.equal(fakeDocument.interruptButton.hidden, false);
+  assert.equal(fakeDocument.interruptButton.dataset.action, 'interrupt');
+  assert.equal(fakeDocument.sendButton.dataset.action, 'busy');
+
+  await app.interruptTurn();
+
+  assert.deepEqual(requests, [
+    {
+      url: '/api/sessions/thread-1/interrupt',
+      method: 'POST',
+      body: { turnId: 'turn-2' },
+    },
+  ]);
+  assert.equal(app.getState().turnStatusBySession['thread-1'], 'interrupted');
+  assert.equal(app.getState().activeTurnIdBySession['thread-1'], undefined);
+  assert.equal(fakeDocument.interruptButton.hidden, true);
+  assert.equal(fakeDocument.sendButton.dataset.action, 'send');
+  assert.equal(fakeDocument.sendButton.textContent, '发送');
+});
+
+test('browser app allows codex sessions to send a follow-up prompt while a turn is running', async () => {
+  const requests = [];
+  const fakeDocument = createFakeDocument();
+  const fakeEventSource = createFakeEventSource();
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Codex thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'codex',
+          modelOptions: [],
+          reasoningEffortOptions: [],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: null,
+            sandboxMode: null,
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Codex thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/turns' && options.method === 'POST') {
+        requests.push({ url, method: options.method, body: JSON.parse(options.body) });
+        return jsonResponse({ turnId: 'turn-3', status: 'started' }, 202);
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  app.setComposerDraft('follow up while running');
+  fakeEventSource.emit({
+    type: 'turn_started',
+    payload: { threadId: 'thread-1', turnId: 'turn-2' },
+  });
+
+  assert.equal(fakeDocument.sendButton.disabled, false);
+  assert.equal(fakeDocument.sendButton.dataset.action, 'send');
+  assert.equal(fakeDocument.sendButton.textContent, '发送');
+  assert.equal(fakeDocument.interruptButton.hidden, false);
+  assert.equal(fakeDocument.interruptButton.dataset.action, 'interrupt');
+
+  fakeDocument.composer.dispatchEvent({
+    type: 'submit',
+    preventDefault() {},
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(requests, [
+    {
+      url: '/api/sessions/thread-1/turns',
+      method: 'POST',
+      body: {
+        text: 'follow up while running',
+        model: null,
+        reasoningEffort: null,
+        attachments: [],
+      },
+    },
+  ]);
+  assert.equal(app.getState().turnStatusBySession['thread-1'], 'started');
+});
+
+test('browser app can collapse and restore the composer without losing the current draft', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  app.setComposerDraft('keep this draft');
+  assert.equal(fakeDocument.composer.dataset.collapsed, 'false');
+  assert.equal(fakeDocument.composerCollapseToggle.textContent, '压缩底栏');
+
+  fakeDocument.composerCollapseToggle.dispatchEvent({ type: 'click' });
+
+  assert.equal(app.getState().composerCollapsed, true);
+  assert.equal(fakeDocument.composer.dataset.collapsed, 'true');
+  assert.equal(fakeDocument.composerCollapseToggle.dataset.collapsed, 'true');
+  assert.equal(fakeDocument.composerCollapseToggle.textContent, '展开底栏');
+  assert.equal(app.getState().composerDraft, 'keep this draft');
+
+  fakeDocument.composerCollapseToggle.dispatchEvent({ type: 'click' });
+
+  assert.equal(app.getState().composerCollapsed, false);
+  assert.equal(fakeDocument.composer.dataset.collapsed, 'false');
+  assert.equal(fakeDocument.composerCollapseToggle.dataset.collapsed, 'false');
+  assert.equal(fakeDocument.composerCollapseToggle.textContent, '压缩底栏');
+  assert.equal(fakeDocument.composerInput.value, 'keep this draft');
 });
 
 test('browser app keeps add-project dialog draft state separate from the workspace file browser and submits the state-owned cwd draft', async () => {

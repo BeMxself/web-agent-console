@@ -552,10 +552,12 @@ test('browser app falls back to the login gate when a protected request later re
   assert.equal(fakeEventSource.closed, true);
 });
 
-test('browser app delays project session creation until the first send', async () => {
+test('browser app delays project session creation until the first send and prevents duplicate creation requests', async () => {
   const requests = [];
   const fakeDocument = createFakeDocument();
   let createdProjectSession = false;
+  let createSessionRequestCount = 0;
+  const createSessionGate = createDeferred();
   const app = createAppController({
     fetchImpl: async (url, options = {}) => {
       if (url === '/api/sessions') {
@@ -577,6 +579,8 @@ test('browser app delays project session creation until the first send', async (
       }
 
       if (url === '/api/projects/%2Ftmp%2Fworkspace-a/sessions' && options.method === 'POST') {
+        createSessionRequestCount += 1;
+        await createSessionGate.promise;
         createdProjectSession = true;
         requests.push({ url, method: options.method });
         return jsonResponse(
@@ -642,7 +646,17 @@ test('browser app delays project session creation until the first send', async (
 
   assert.equal(fakeDocument.sendButton.disabled, false);
 
-  await app.sendTurn('first message');
+  const firstSendPromise = app.sendTurn('first message');
+  const secondSendPromise = app.sendTurn('first message');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(fakeDocument.sendButton.disabled, true);
+  assert.equal(createSessionRequestCount, 1);
+  assert.deepEqual(requests, [{ url: '/api/sessions', method: 'GET' }]);
+
+  createSessionGate.resolve();
+  await firstSendPromise;
+  const secondSendResult = await secondSendPromise;
 
   assert.equal(app.getState().pendingSessionProjectId, null);
   assert.equal(app.getState().selectedSessionId, 'thread-3');
@@ -665,4 +679,3 @@ test('browser app delays project session creation until the first send', async (
     },
   ]);
 });
-

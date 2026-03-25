@@ -96,6 +96,7 @@ export const initialState = {
   activeTurnIdBySession: {},
   unreadBySession: {},
   composerDraft: '',
+  composerCollapsed: false,
   composerAttachments: [],
   composerAttachmentError: null,
   taskSummaryCollapsedBySession: {},
@@ -114,6 +115,7 @@ export const initialState = {
   showConversationNav: true,
   mobileDrawerOpen: false,
   mobileDrawerMode: 'sessions',
+  pendingSessionCreation: false,
   auth: createInitialAuthState(),
   loadError: null,
   systemStatus: createInitialSystemStatus(),
@@ -446,6 +448,7 @@ export function reduceState(state = initialState, action) {
         ...state,
         selectedSessionId: action.payload.id,
         pendingSessionProjectId: null,
+        pendingSessionCreation: false,
         composerAttachments: preserveComposerAttachments ? state.composerAttachments : [],
         composerAttachmentError: preserveComposerAttachments ? state.composerAttachmentError : null,
         composerAttachmentMenuOpen: false,
@@ -469,6 +472,7 @@ export function reduceState(state = initialState, action) {
         ...state,
         selectedSessionId: null,
         pendingSessionProjectId: action.payload.projectId,
+        pendingSessionCreation: false,
         composerAttachments: [],
         composerAttachmentError: null,
         composerAttachmentMenuOpen: false,
@@ -478,9 +482,25 @@ export function reduceState(state = initialState, action) {
       return {
         ...state,
         pendingSessionProjectId: null,
+        pendingSessionCreation: false,
         composerAttachments: [],
         composerAttachmentError: null,
         fileBrowser: createInitialFileBrowserState(),
+      };
+    case 'project_session_creation_started':
+      return {
+        ...state,
+        pendingSessionCreation: true,
+      };
+    case 'project_session_creation_finished':
+      return {
+        ...state,
+        pendingSessionCreation: false,
+      };
+    case 'composer_visibility_toggled':
+      return {
+        ...state,
+        composerCollapsed: Boolean(action.payload?.collapsed),
       };
     case 'file_browser_requested':
       return {

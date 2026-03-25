@@ -25,6 +25,10 @@ export function canSendTurn(state, draftText = state.composerDraft) {
     return false;
   }
 
+  if (state.pendingSessionCreation) {
+    return false;
+  }
+
   const hasDraftTarget = Boolean(state.selectedSessionId || state.pendingSessionProjectId);
   if (!hasDraftTarget || !String(draftText ?? '').trim()) {
     return false;
@@ -51,7 +55,15 @@ export function canSendTurn(state, draftText = state.composerDraft) {
   }
 
   const status = state.turnStatusBySession[sessionId] ?? 'idle';
-  return status !== 'started' && status !== 'interrupting';
+  if (status === 'interrupting') {
+    return false;
+  }
+
+  if (status !== 'started') {
+    return true;
+  }
+
+  return supportsLiveTurnFollowUp(state);
 }
 
 export function canInterruptTurn(state) {
@@ -67,6 +79,10 @@ export function canInterruptTurn(state) {
   const turnId = state.activeTurnIdBySession[sessionId];
   const status = state.turnStatusBySession[sessionId] ?? 'idle';
   return Boolean(turnId) && status === 'started';
+}
+
+export function supportsLiveTurnFollowUp(state) {
+  return state?.sessionOptions?.providerId === 'codex';
 }
 
 export function extractUserText(item) {

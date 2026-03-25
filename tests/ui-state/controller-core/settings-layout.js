@@ -493,13 +493,12 @@ test('browser app applies the new composer action hierarchy and surfaces blocked
     type: 'turn_started',
     payload: { threadId: 'thread-1', turnId: 'turn-2' },
   });
-  assert.equal(fakeDocument.sendButton.dataset.action, 'interrupt');
-  assert.match(fakeDocument.sendButton.textContent, /(中断|停止)/);
+  assert.equal(fakeDocument.sendButton.dataset.action, 'busy');
+  assert.match(fakeDocument.sendButton.textContent, /执行中/);
+  assert.equal(fakeDocument.interruptButton.hidden, false);
+  assert.equal(fakeDocument.interruptButton.dataset.action, 'interrupt');
 
-  fakeDocument.composer.dispatchEvent({
-    type: 'submit',
-    preventDefault() {},
-  });
+  fakeDocument.interruptButton.dispatchEvent({ type: 'click' });
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(requests.some((request) => request.url === '/api/sessions/thread-1/interrupt'), true);
@@ -507,8 +506,8 @@ test('browser app applies the new composer action hierarchy and surfaces blocked
     requests.some((request) => request.url === '/api/turn' && request.method === 'POST'),
     false,
   );
-  assert.equal(fakeDocument.sendButton.dataset.action, 'interrupting');
-  assert.match(fakeDocument.sendButton.textContent, /停止/);
+  assert.equal(fakeDocument.sendButton.dataset.action, 'send');
+  assert.match(fakeDocument.sendButton.textContent, /发送/);
   assert.match(fakeDocument.composer.innerHTML, /等待审批后可继续发送/);
 });
 
