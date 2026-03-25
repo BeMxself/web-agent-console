@@ -6,6 +6,7 @@ import {
   clearLoginPassword,
   clearRenameInput,
   closeDialog,
+  copyTextToClipboard,
   focusProjectInput,
   focusRenameInput,
   isAuthenticatedAppState,
@@ -18,6 +19,7 @@ import {
   scrollConversationToBottom,
   setRenameDialogSession,
 } from './dom-utils.js';
+import { buildThreadItemCopyText } from './render-turn-items.js';
 import {
   buildAttachmentDownloadUrl,
   buildLocalFileListUrl,
@@ -268,6 +270,23 @@ export function createSessionControllerApi(ctx) {
       } catch {
         return ctx.state.sessionSettingsById[sessionId] ?? createInitialSessionSettings();
       }
+    },
+    async copyThreadItem(itemId, sessionId = ctx.state.selectedSessionId) {
+      const normalizedSessionId = String(sessionId ?? '').trim();
+      const normalizedItemId = String(itemId ?? '').trim();
+      if (!normalizedSessionId || !normalizedItemId) {
+        return null;
+      }
+
+      const thread = ctx.state.sessionDetailsById?.[normalizedSessionId] ?? null;
+      const item = findThreadItemById(thread, normalizedItemId);
+      const copyText = buildThreadItemCopyText(item);
+      if (!copyText) {
+        return null;
+      }
+
+      const copied = await copyTextToClipboard(ctx.documentRef, copyText);
+      return copied ? copyText : null;
     },
     startStatusPolling(intervalMs = 3_000) {
       if (!isAuthenticatedAppState(ctx.state)) {
@@ -1188,4 +1207,21 @@ function formatRewriteDialogButtonLabel(mode, primary) {
   }
 
   return '';
+}
+
+function findThreadItemById(thread, itemId) {
+  const normalizedItemId = String(itemId ?? '').trim();
+  if (!thread || !normalizedItemId) {
+    return null;
+  }
+
+  for (const turn of thread.turns ?? []) {
+    for (const item of turn.items ?? []) {
+      if (String(item?.id ?? '').trim() === normalizedItemId) {
+        return item;
+      }
+    }
+  }
+
+  return null;
 }

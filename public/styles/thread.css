@@ -657,6 +657,36 @@
   padding: 0 12px 10px;
 }
 
+.thread-item-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 12px 10px;
+}
+
+.thread-item-card-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(17, 32, 49, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #4b627a;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.thread-item-card-copy-button:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.thread-item-card-copy-button--inline {
+  flex: 0 0 auto;
+}
+
 .thread-item-card--reasoning {
   background: rgba(255, 248, 230, 0.7);
 }
@@ -789,6 +819,10 @@
   margin-top: 10px;
 }
 
+.message-actions--icon-only {
+  margin-top: 8px;
+}
+
 .message-action-button {
   padding: 6px 10px;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -797,6 +831,26 @@
   color: inherit;
   font-size: 12px;
   font-weight: 700;
+}
+
+.message-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(17, 32, 49, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: #4b627a;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.message-copy-button:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .message-text {

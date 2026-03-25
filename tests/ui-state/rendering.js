@@ -585,6 +585,41 @@ test('render helpers show native cards for reasoning command mcp and unknown ite
   assert.match(detailHtml, /Searching docs/);
   assert.match(detailHtml, /通用事件/);
   assert.match(detailHtml, /contextCompaction/);
+  assert.match(detailHtml, /data-copy-thread-item="item-command-1"/);
+  assert.match(detailHtml, /data-copy-thread-item="item-mcp-1"/);
+  assert.match(detailHtml, /data-copy-thread-item="item-fallback-1"/);
+  assert.match(detailHtml, /thread-item-card-summary-meta[\s\S]*thread-item-card-copy-button thread-item-card-copy-button--inline[\s\S]*data-copy-thread-item="item-command-1"/);
+  assert.match(detailHtml, /thread-item-card-summary-meta[\s\S]*thread-item-card-copy-button thread-item-card-copy-button--inline[\s\S]*data-copy-thread-item="item-mcp-1"/);
+  assert.match(detailHtml, /thread-item-card-summary-meta[\s\S]*thread-item-card-copy-button thread-item-card-copy-button--inline[\s\S]*data-copy-thread-item="item-fallback-1"/);
+  assert.match(detailHtml, /thread-item-card--generic thread-item-card--collapsible/);
+  assert.doesNotMatch(detailHtml, /thread-item-card--generic thread-item-card--collapsible" open/);
+});
+
+test('render helpers rename the user rewrite action to 修改', () => {
+  const detailHtml = renderThreadDetail({
+    id: 'thread-user-actions',
+    name: 'User action session',
+    cwd: '/tmp/workspace-a',
+    turns: [
+      {
+        id: 'turn-1',
+        status: 'completed',
+        items: [
+          {
+            type: 'userMessage',
+            id: 'user-1',
+            content: [{ type: 'text', text: 'Rewrite me', text_elements: [] }],
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.match(detailHtml, /data-rewrite-user-message="user-1"/);
+  assert.match(detailHtml, /data-copy-thread-item="user-1"/);
+  assert.match(detailHtml, /message-copy-button/);
+  assert.match(detailHtml, />修改</);
+  assert.doesNotMatch(detailHtml, /从这里重写/);
 });
 
 test('render helpers separate command status chips from disclosure controls and collapse file changes by default', () => {
@@ -707,6 +742,8 @@ test('render helpers render full markdown in message bubbles and keep raw html e
   });
 
   assert.match(detailHtml, /message-markdown/);
+  assert.match(detailHtml, /data-copy-thread-item="item-markdown-1"/);
+  assert.match(detailHtml, /message-copy-button/);
   assert.match(detailHtml, /<h1[^>]*>Heading<\/h1>/);
   assert.match(detailHtml, /<ul>\s*<li>first item<\/li>\s*<li>second item<\/li>\s*<\/ul>/);
   assert.match(detailHtml, /<ol>\s*<li>ordered one<\/li>\s*<li>ordered two<\/li>\s*<\/ol>/);
@@ -729,6 +766,38 @@ test('render helpers render full markdown in message bubbles and keep raw html e
   );
   assert.match(detailHtml, /&lt;script&gt;alert\(&quot;xss&quot;\)&lt;\/script&gt;/);
   assert.doesNotMatch(detailHtml, /<script>alert\("xss"\)<\/script>/);
+});
+
+test('render helpers show copy buttons on assistant and commentary message bubbles', () => {
+  const detailHtml = renderThreadDetail({
+    id: 'thread-agent-copy',
+    name: 'Agent copy session',
+    cwd: '/tmp/workspace-a',
+    turns: [
+      {
+        id: 'turn-1',
+        status: 'completed',
+        items: [
+          {
+            type: 'agentMessage',
+            id: 'agent-commentary-1',
+            phase: 'commentary',
+            text: 'Thinking through the repository layout.',
+          },
+          {
+            type: 'agentMessage',
+            id: 'agent-final-1',
+            phase: 'final_answer',
+            text: 'Final answer body.',
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.match(detailHtml, /data-copy-thread-item="agent-commentary-1"/);
+  assert.match(detailHtml, /data-copy-thread-item="agent-final-1"/);
+  assert.match(detailHtml, /message-copy-button/);
 });
 
 test('render helpers number user attachment actions by attachment order instead of raw content index', () => {

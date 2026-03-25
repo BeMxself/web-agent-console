@@ -62,6 +62,7 @@ export function renderMessageBubble(label, text, role, options = {}) {
     `<div class="message-role">${escapeHtml(label)}</div>`,
     `<div class="${renderedMessage.className}">${renderedMessage.html}</div>`,
     options.attachmentsHtml ?? '',
+    options.actionsHtml ?? '',
     '</div>',
   ].join('');
 }
@@ -81,10 +82,14 @@ export function renderUserMessageActions(item) {
   if (!messageText || attachments.length > 0) {
     return '';
   }
+  const normalizedItemId = String(item?.id ?? '').trim();
 
   return [
     '<div class="message-actions">',
-    `<button class="message-action-button" type="button" data-rewrite-user-message="${escapeHtml(item.id ?? '')}">从这里重写</button>`,
+    normalizedItemId
+      ? `<button class="message-copy-button" type="button" data-copy-thread-item="${escapeHtml(normalizedItemId)}" aria-label="复制消息内容" title="复制消息内容">⧉</button>`
+      : '',
+    `<button class="message-action-button" type="button" data-rewrite-user-message="${escapeHtml(item.id ?? '')}">修改</button>`,
     '</div>',
   ].join('');
 }
@@ -98,6 +103,27 @@ export function renderUserMessageAttachments(item) {
   return [
     '<div class="message-attachments" role="list">',
     attachments.map((attachment) => renderUserMessageAttachmentCard(attachment)).join(''),
+    '</div>',
+  ].join('');
+}
+
+export function renderAgentMessageBubble(item) {
+  const label = item.phase === 'final_answer' ? '助手' : '助手过程';
+  return renderMessageBubble(label, item.text ?? '', 'assistant', {
+    streaming: Boolean(item.streaming),
+    actionsHtml: renderAgentMessageActions(item),
+  });
+}
+
+export function renderAgentMessageActions(item) {
+  const normalizedItemId = String(item?.id ?? '').trim();
+  if (!normalizedItemId) {
+    return '';
+  }
+
+  return [
+    '<div class="message-actions message-actions--icon-only">',
+    `<button class="message-copy-button" type="button" data-copy-thread-item="${escapeHtml(normalizedItemId)}" aria-label="复制消息内容" title="复制消息内容">⧉</button>`,
     '</div>',
   ].join('');
 }
@@ -141,6 +167,7 @@ export function renderPlanTurnItem(item) {
     : '';
 
   return renderThreadItemCard({
+    copyItemId: item.id,
     label: '计划',
     title: '执行计划',
     tone: 'plan',
@@ -155,6 +182,7 @@ export function renderReasoningTurnItem(item) {
   const content = renderParagraphList(item.content ?? []);
 
   return renderThreadItemCard({
+    copyItemId: item.id,
     label: '推理',
     title: '推理摘要',
     tone: 'reasoning',
@@ -170,6 +198,7 @@ export function renderReasoningTurnItem(item) {
 
 export function renderCommandExecutionTurnItem(item) {
   return renderThreadItemCard({
+    copyItemId: item.id,
     label: '命令执行',
     title: item.command || 'Command',
     tone: 'command',
@@ -190,6 +219,7 @@ export function renderCommandExecutionTurnItem(item) {
 
 export function renderMcpToolCallTurnItem(item) {
   return renderThreadItemCard({
+    copyItemId: item.id,
     label: 'MCP 工具',
     title: `${item.server || 'unknown'} / ${item.tool || 'unknown'}`,
     tone: 'mcp',
@@ -216,6 +246,7 @@ export function renderMcpToolCallTurnItem(item) {
 
 export function renderCollabAgentTurnItem(item) {
   return renderThreadItemCard({
+    copyItemId: item.id,
     label: 'Subagent',
     title: item.tool || 'spawnAgent',
     tone: 'subagent',
@@ -226,14 +257,7 @@ export function renderCollabAgentTurnItem(item) {
 }
 
 export function renderFileChangeTurnItem(item) {
-  const title =
-    item.path ??
-    item.relativePath ??
-    item.filePath ??
-    item.targetPath ??
-    item.uri ??
-    item.name ??
-    '文件变更';
+  const title = resolveFileChangeTitle(item);
   const changeType = firstNonEmptyText(item.changeType, item.operation, item.kind, item.event);
   const preview = firstNonEmptyText(item.diff, item.patch, item.content, item.preview);
   const extra = omitObjectKeys(item, [
@@ -267,6 +291,7 @@ export function renderFileChangeTurnItem(item) {
     .join('');
 
   return renderThreadItemCard({
+    copyItemId: item.id,
     label: '文件变更',
     title,
     tone: 'fileChange',
@@ -280,15 +305,19 @@ export function renderFileChangeTurnItem(item) {
 
 export function renderFallbackTurnItem(item) {
   return renderThreadItemCard({
+    copyItemId: item.id,
     label: '通用事件',
     title: item.type ?? 'unknown',
     tone: 'generic',
     status: null,
+    collapsible: true,
+    expanded: false,
     body: `<pre class="thread-item-pre">${escapeHtml(JSON.stringify(item, null, 2))}</pre>`,
   });
 }
 
 export function renderThreadItemCard({
+  copyItemId = null,
   label,
   title,
   tone,
@@ -305,6 +334,8 @@ export function renderThreadItemCard({
     title,
     trailingMeta: collapsible ? '' : statusBadge,
   });
+  const copyAction = renderThreadItemCardCopyButton(copyItemId);
+  const cardActions = copyAction ? renderThreadItemCardActions(copyAction) : '';
 
   if (collapsible) {
     classes.push('thread-item-card--collapsible');
@@ -314,6 +345,12 @@ export function renderThreadItemCard({
       `<div class="thread-item-card-summary-copy">${cardHeader}</div>`,
       '<div class="thread-item-card-summary-meta">',
       statusBadge,
+      copyAction
+        ? copyAction.replace(
+            'thread-item-card-copy-button"',
+            'thread-item-card-copy-button thread-item-card-copy-button--inline"',
+          ).replace('<button', '<span role="button" tabindex="0"').replace('</button>', '</span>')
+        : '',
       renderThreadItemDisclosure(),
       '</div>',
       '</summary>',
@@ -326,8 +363,30 @@ export function renderThreadItemCard({
     `<section class="${classes.join(' ')}">`,
     cardHeader,
     body ? `<div class="thread-item-card-body">${body}</div>` : '',
+    cardActions,
     '</section>',
   ].join('');
+}
+
+export function renderThreadItemCardActions(copyItemId) {
+  if (!copyItemId) {
+    return '';
+  }
+
+  return [
+    '<div class="thread-item-card-actions">',
+    copyItemId,
+    '</div>',
+  ].join('');
+}
+
+export function renderThreadItemCardCopyButton(copyItemId) {
+  const normalizedItemId = String(copyItemId ?? '').trim();
+  if (!normalizedItemId) {
+    return '';
+  }
+
+  return `<button class="thread-item-card-copy-button" type="button" data-copy-thread-item="${escapeHtml(normalizedItemId)}" aria-label="复制卡片内容" title="复制卡片内容">⧉</button>`;
 }
 
 export function renderThreadItemCardCopy({ label, title, trailingMeta = '' }) {
@@ -418,6 +477,128 @@ export function formatItemStatus(status) {
   return labels[status] ?? String(status);
 }
 
+export function buildThreadItemCopyText(item) {
+  if (!item || typeof item !== 'object') {
+    return '';
+  }
+
+  switch (item.type) {
+    case 'commandExecution':
+      return buildCommandExecutionCopyText(item);
+    case 'mcpToolCall':
+      return buildMcpToolCallCopyText(item);
+    case 'reasoning':
+      return buildReasoningCopyText(item);
+    case 'plan':
+      return buildPlanCopyText(item);
+    case 'fileChange':
+      return buildFileChangeCopyText(item);
+    case 'collabAgentToolCall':
+      return formatCollabToolCall(item);
+    case 'agentMessage':
+      return String(item.text ?? '').trim();
+    case 'userMessage':
+      return extractUserText(item);
+    default:
+      return JSON.stringify(item, null, 2);
+  }
+}
+
+export function buildCommandExecutionCopyText(item) {
+  return [
+    item.command ? `Command: ${item.command}` : '',
+    item.cwd ? `CWD: ${item.cwd}` : '',
+    item.status ? `Status: ${formatItemStatus(item.status) ?? item.status}` : '',
+    item.aggregatedOutput ? `Output:\n${item.aggregatedOutput}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function buildMcpToolCallCopyText(item) {
+  return [
+    item.server ? `Server: ${item.server}` : '',
+    item.tool ? `Tool: ${item.tool}` : '',
+    item.status ? `Status: ${formatItemStatus(item.status) ?? item.status}` : '',
+    hasJsonValue(item.arguments) ? `Arguments:\n${JSON.stringify(item.arguments, null, 2)}` : '',
+    (item.progressMessages ?? []).length
+      ? `Progress:\n${item.progressMessages.map((message) => `- ${message}`).join('\n')}`
+      : '',
+    item.result ? `Result:\n${JSON.stringify(item.result, null, 2)}` : '',
+    item.error ? `Error:\n${JSON.stringify(item.error, null, 2)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function buildReasoningCopyText(item) {
+  return [
+    (item.summary ?? []).length ? `Summary:\n${(item.summary ?? []).join('\n')}` : '',
+    (item.content ?? []).length ? `Details:\n${(item.content ?? []).join('\n')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function buildPlanCopyText(item) {
+  const normalizedPlan = normalizeTurnPlan(item);
+  const steps = (normalizedPlan?.steps ?? []).map((step, index) => `${index + 1}. ${step.step}`);
+  return [
+    normalizedPlan?.explanation ? `Explanation:\n${normalizedPlan.explanation}` : '',
+    steps.length ? `Steps:\n${steps.join('\n')}` : '',
+    normalizedPlan?.text ? `Plan:\n${normalizedPlan.text}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function buildFileChangeCopyText(item) {
+  const extra = omitObjectKeys(item, [
+    'type',
+    'id',
+    'path',
+    'relativePath',
+    'filePath',
+    'targetPath',
+    'uri',
+    'name',
+    'changeType',
+    'operation',
+    'kind',
+    'event',
+    'diff',
+    'patch',
+    'content',
+    'preview',
+    'status',
+  ]);
+
+  return [
+    `Path: ${resolveFileChangeTitle(item)}`,
+    firstNonEmptyText(item.changeType, item.operation, item.kind, item.event)
+      ? `Type: ${firstNonEmptyText(item.changeType, item.operation, item.kind, item.event)}`
+      : '',
+    firstNonEmptyText(item.diff, item.patch, item.content, item.preview)
+      ? `Preview:\n${firstNonEmptyText(item.diff, item.patch, item.content, item.preview)}`
+      : '',
+    hasJsonValue(extra) ? `Extra:\n${JSON.stringify(extra, null, 2)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+export function resolveFileChangeTitle(item) {
+  return (
+    item.path ??
+    item.relativePath ??
+    item.filePath ??
+    item.targetPath ??
+    item.uri ??
+    item.name ??
+    '文件变更'
+  );
+}
+
 export function normalizeThreadItemStatusTone(status) {
   const normalized = String(status ?? '').trim();
   if (!normalized) {
@@ -442,12 +623,7 @@ export function hasJsonValue(value) {
 
 const TURN_ITEM_RENDERERS = {
   userMessage: renderUserMessageBubble,
-  agentMessage(item) {
-    const label = item.phase === 'final_answer' ? '助手' : '助手过程';
-    return renderMessageBubble(label, item.text ?? '', 'assistant', {
-      streaming: Boolean(item.streaming),
-    });
-  },
+  agentMessage: renderAgentMessageBubble,
   plan: renderPlanTurnItem,
   reasoning: renderReasoningTurnItem,
   commandExecution: renderCommandExecutionTurnItem,

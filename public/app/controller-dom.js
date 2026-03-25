@@ -392,9 +392,6 @@ export function renderApp(ctx) {
         composerCollapseToggle.dataset.collapsed = String(collapsed);
       }
       const nextTitle = collapsed ? '展开底栏' : '压缩底栏';
-      if (composerCollapseToggle.textContent !== nextTitle) {
-        composerCollapseToggle.textContent = nextTitle;
-      }
       if (composerCollapseToggle.title !== nextTitle) {
         composerCollapseToggle.title = nextTitle;
       }
@@ -884,6 +881,13 @@ export function bindControllerDocumentEvents(ctx) {
       if (rewriteUserMessageButton) {
         event.preventDefault?.();
         void ctx.controller.openRewriteDialog(rewriteUserMessageButton.dataset.rewriteUserMessage);
+        return;
+      }
+
+      const copyThreadItemButton = event?.target?.closest?.('[data-copy-thread-item]');
+      if (copyThreadItemButton) {
+        event.preventDefault?.();
+        void ctx.controller.copyThreadItem(copyThreadItemButton.dataset.copyThreadItem);
         return;
       }
 

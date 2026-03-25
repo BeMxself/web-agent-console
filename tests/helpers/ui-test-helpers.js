@@ -102,7 +102,7 @@ export function createFakeDocument(options = {}) {
   const composerInlineFeedback = createFakeElement();
   const composerInput = createFakeElement({ value: '' });
   const approvalModeControls = createFakeElement();
-  const composerCollapseToggle = createFakeElement({ dataset: {}, textContent: '压缩底栏' });
+  const composerCollapseToggle = createFakeElement({ dataset: {}, textContent: '' });
   const composerUploadFileButton = createFakeElement({ dataset: {} });
   const composerUploadFileAction = createFakeElement({ dataset: {} });
   const composerUploadImageButton = createFakeElement({ dataset: {} });
@@ -396,8 +396,17 @@ export function createFakeStyle() {
 }
 
 export function createFakeWindow({ mobile }) {
+  const clipboardWrites = [];
   return {
     innerWidth: mobile ? 390 : 1280,
+    navigator: {
+      clipboard: {
+        async writeText(text) {
+          clipboardWrites.push(String(text));
+        },
+      },
+    },
+    __clipboardWrites: clipboardWrites,
     requestAnimationFrame(callback) {
       callback();
       return 1;

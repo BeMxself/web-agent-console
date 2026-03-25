@@ -180,6 +180,15 @@ function createClosestTarget(selector, dataset = {}) {
   };
 }
 
+function createMultiClosestTarget(entries = {}) {
+  return {
+    closest(selector) {
+      const dataset = entries[selector];
+      return dataset ? { dataset } : null;
+    },
+  };
+}
+
 test('browser app keeps add-project input focus, caret, and body scroll stable across the initial HOME browse load', async () => {
   const fakeDocument = createFakeDocument();
   const continuity = attachProjectDialogWithContinuityTracking(fakeDocument);
@@ -839,14 +848,16 @@ test('browser app can collapse and restore the composer without losing the curre
 
   app.setComposerDraft('keep this draft');
   assert.equal(fakeDocument.composer.dataset.collapsed, 'false');
-  assert.equal(fakeDocument.composerCollapseToggle.textContent, '压缩底栏');
+  assert.equal(fakeDocument.composerCollapseToggle.textContent, '');
+  assert.equal(fakeDocument.composerCollapseToggle.title, '压缩底栏');
 
   fakeDocument.composerCollapseToggle.dispatchEvent({ type: 'click' });
 
   assert.equal(app.getState().composerCollapsed, true);
   assert.equal(fakeDocument.composer.dataset.collapsed, 'true');
   assert.equal(fakeDocument.composerCollapseToggle.dataset.collapsed, 'true');
-  assert.equal(fakeDocument.composerCollapseToggle.textContent, '展开底栏');
+  assert.equal(fakeDocument.composerCollapseToggle.textContent, '');
+  assert.equal(fakeDocument.composerCollapseToggle.title, '展开底栏');
   assert.equal(app.getState().composerDraft, 'keep this draft');
 
   fakeDocument.composerCollapseToggle.dispatchEvent({ type: 'click' });
@@ -854,7 +865,8 @@ test('browser app can collapse and restore the composer without losing the curre
   assert.equal(app.getState().composerCollapsed, false);
   assert.equal(fakeDocument.composer.dataset.collapsed, 'false');
   assert.equal(fakeDocument.composerCollapseToggle.dataset.collapsed, 'false');
-  assert.equal(fakeDocument.composerCollapseToggle.textContent, '压缩底栏');
+  assert.equal(fakeDocument.composerCollapseToggle.textContent, '');
+  assert.equal(fakeDocument.composerCollapseToggle.title, '压缩底栏');
   assert.equal(fakeDocument.composerInput.value, 'keep this draft');
 });
 
@@ -2299,6 +2311,383 @@ test('browser app hides rewrite actions for user questions that include attachme
 
   assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, /data-rewrite-user-message=/);
   assert.equal(fakeDocument.rewriteDialog.open, false);
+});
+
+test('browser app copies card content with type-aware payloads from the conversation view', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Copy thread', cwd: '/tmp/workspace-a' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Copy thread',
+            cwd: '/tmp/workspace-a',
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'commandExecution',
+                    id: 'item-command-1',
+                    command: 'npm test',
+                    cwd: '/tmp/workspace-a',
+                    status: 'completed',
+                    aggregatedOutput: 'all tests passed',
+                  },
+                  {
+                    type: 'mcpToolCall',
+                    id: 'item-mcp-1',
+                    server: 'docs',
+                    tool: 'search',
+                    status: 'completed',
+                    arguments: { q: 'rewrite' },
+                    result: { hits: 2 },
+                    error: null,
+                    progressMessages: ['searching'],
+                  },
+                  {
+                    type: 'contextCompaction',
+                    id: 'item-generic-1',
+                    foo: 'bar',
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'claude-sdk',
+          rewriteCapabilities: {
+            branch: true,
+            inPlace: true,
+          },
+          modelOptions: [{ value: '', label: '默认' }],
+          reasoningEffortOptions: [{ value: '', label: '默认' }],
+          defaults: { model: null, reasoningEffort: null },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: null,
+          reasoningEffort: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  assert.match(fakeDocument.conversationBody.innerHTML, /data-copy-thread-item="item-command-1"/);
+  assert.match(fakeDocument.conversationBody.innerHTML, /data-copy-thread-item="item-mcp-1"/);
+  assert.match(fakeDocument.conversationBody.innerHTML, /data-copy-thread-item="item-generic-1"/);
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createMultiClosestTarget({
+      '[data-copy-thread-item]': {
+        copyThreadItem: 'item-command-1',
+      },
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.match(fakeDocument.defaultView.__clipboardWrites[0] ?? '', /npm test/);
+  assert.match(fakeDocument.defaultView.__clipboardWrites[0] ?? '', /all tests passed/);
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createMultiClosestTarget({
+      '[data-copy-thread-item]': {
+        copyThreadItem: 'item-mcp-1',
+      },
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.match(fakeDocument.defaultView.__clipboardWrites[1] ?? '', /docs/);
+  assert.match(fakeDocument.defaultView.__clipboardWrites[1] ?? '', /"hits": 2/);
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createMultiClosestTarget({
+      '[data-copy-thread-item]': {
+        copyThreadItem: 'item-generic-1',
+      },
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.match(fakeDocument.defaultView.__clipboardWrites[2] ?? '', /"type": "contextCompaction"/);
+  assert.match(fakeDocument.defaultView.__clipboardWrites[2] ?? '', /"foo": "bar"/);
+});
+
+test('browser app copies assistant and commentary message text from the conversation view', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Assistant copy thread', cwd: '/tmp/workspace-a' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Assistant copy thread',
+            cwd: '/tmp/workspace-a',
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'agentMessage',
+                    id: 'agent-commentary-1',
+                    phase: 'commentary',
+                    text: 'Thinking through the repository layout.',
+                  },
+                  {
+                    type: 'agentMessage',
+                    id: 'agent-final-1',
+                    phase: 'final_answer',
+                    text: 'Final answer body.',
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'claude-sdk',
+          rewriteCapabilities: {
+            branch: true,
+            inPlace: true,
+          },
+          modelOptions: [{ value: '', label: '默认' }],
+          reasoningEffortOptions: [{ value: '', label: '默认' }],
+          defaults: { model: null, reasoningEffort: null },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: null,
+          reasoningEffort: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  assert.match(fakeDocument.conversationBody.innerHTML, /data-copy-thread-item="agent-commentary-1"/);
+  assert.match(fakeDocument.conversationBody.innerHTML, /data-copy-thread-item="agent-final-1"/);
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createMultiClosestTarget({
+      '[data-copy-thread-item]': {
+        copyThreadItem: 'agent-commentary-1',
+      },
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createMultiClosestTarget({
+      '[data-copy-thread-item]': {
+        copyThreadItem: 'agent-final-1',
+      },
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(fakeDocument.defaultView.__clipboardWrites.at(-2), 'Thinking through the repository layout.');
+  assert.equal(fakeDocument.defaultView.__clipboardWrites.at(-1), 'Final answer body.');
+});
+
+test('browser app copies user message text while keeping the modify action', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'User copy thread', cwd: '/tmp/workspace-a' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'User copy thread',
+            cwd: '/tmp/workspace-a',
+            turns: [
+              {
+                id: 'turn-1',
+                status: 'completed',
+                items: [
+                  {
+                    type: 'userMessage',
+                    id: 'user-1',
+                    content: [{ type: 'text', text: 'User message body', text_elements: [] }],
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      if (url === '/api/approval-mode') {
+        return jsonResponse({ mode: 'manual' });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'claude-sdk',
+          rewriteCapabilities: {
+            branch: true,
+            inPlace: true,
+          },
+          modelOptions: [{ value: '', label: '默认' }],
+          reasoningEffortOptions: [{ value: '', label: '默认' }],
+          defaults: { model: null, reasoningEffort: null },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: null,
+          reasoningEffort: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  assert.match(fakeDocument.conversationBody.innerHTML, /data-rewrite-user-message="user-1"/);
+  assert.match(fakeDocument.conversationBody.innerHTML, /data-copy-thread-item="user-1"/);
+
+  fakeDocument.conversationBody.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createMultiClosestTarget({
+      '[data-copy-thread-item]': {
+        copyThreadItem: 'user-1',
+      },
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(fakeDocument.defaultView.__clipboardWrites.at(-1), 'User message body');
 });
 
 test('browser app loads approval mode, toggles it, and refreshes pending approvals after approval sse events', async () => {

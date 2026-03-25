@@ -309,6 +309,24 @@ export function closeDialog(dialog) {
   dialog.open = false;
 }
 
+export async function copyTextToClipboard(documentRef, text) {
+  const normalizedText = String(text ?? '');
+  if (!normalizedText) {
+    return false;
+  }
+
+  const navigatorRef =
+    documentRef?.defaultView?.navigator ??
+    globalThis.navigator ??
+    null;
+  if (typeof navigatorRef?.clipboard?.writeText === 'function') {
+    await navigatorRef.clipboard.writeText(normalizedText);
+    return true;
+  }
+
+  return false;
+}
+
 export function restorePersistentState(baseState, storageImpl) {
   const storedPreference = readStoredPanelPreference(storageImpl);
   if (!storedPreference) {
