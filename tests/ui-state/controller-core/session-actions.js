@@ -2675,6 +2675,7 @@ test('browser app copies user message text while keeping the modify action', asy
 
   assert.match(fakeDocument.conversationBody.innerHTML, /data-rewrite-user-message="user-1"/);
   assert.match(fakeDocument.conversationBody.innerHTML, /data-copy-thread-item="user-1"/);
+  assert.doesNotMatch(fakeDocument.conversationBody.innerHTML, />修改</);
 
   fakeDocument.conversationBody.dispatchEvent({
     type: 'click',

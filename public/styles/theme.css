@@ -482,7 +482,7 @@ body[data-theme="dark"] .auth-theme-toggle:hover {
   background: rgba(214, 226, 238, 0.08);
 }
 
-.layout[data-theme="dark"] .message-copy-button {
+.layout[data-theme="dark"] .message-icon-button {
   border-color: rgba(159, 182, 203, 0.18);
   background: rgba(17, 32, 49, 0.42);
   color: #dce7f2;

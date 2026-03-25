@@ -87,9 +87,9 @@ export function renderUserMessageActions(item) {
   return [
     '<div class="message-actions">',
     normalizedItemId
-      ? `<button class="message-copy-button" type="button" data-copy-thread-item="${escapeHtml(normalizedItemId)}" aria-label="复制消息内容" title="复制消息内容">⧉</button>`
+      ? `<button class="message-icon-button message-copy-button" type="button" data-copy-thread-item="${escapeHtml(normalizedItemId)}" aria-label="复制消息内容" title="复制消息内容">⧉</button>`
       : '',
-    `<button class="message-action-button" type="button" data-rewrite-user-message="${escapeHtml(item.id ?? '')}">修改</button>`,
+    `<button class="message-icon-button message-modify-button" type="button" data-rewrite-user-message="${escapeHtml(item.id ?? '')}" aria-label="修改问题" title="修改问题">✎</button>`,
     '</div>',
   ].join('');
 }
@@ -123,7 +123,7 @@ export function renderAgentMessageActions(item) {
 
   return [
     '<div class="message-actions message-actions--icon-only">',
-    `<button class="message-copy-button" type="button" data-copy-thread-item="${escapeHtml(normalizedItemId)}" aria-label="复制消息内容" title="复制消息内容">⧉</button>`,
+    `<button class="message-icon-button message-copy-button" type="button" data-copy-thread-item="${escapeHtml(normalizedItemId)}" aria-label="复制消息内容" title="复制消息内容">⧉</button>`,
     '</div>',
   ].join('');
 }

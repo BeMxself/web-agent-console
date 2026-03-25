@@ -617,9 +617,10 @@ test('render helpers rename the user rewrite action to 修改', () => {
 
   assert.match(detailHtml, /data-rewrite-user-message="user-1"/);
   assert.match(detailHtml, /data-copy-thread-item="user-1"/);
-  assert.match(detailHtml, /message-copy-button/);
-  assert.match(detailHtml, />修改</);
+  assert.match(detailHtml, /message-icon-button/);
+  assert.match(detailHtml, /aria-label="修改问题"/);
   assert.doesNotMatch(detailHtml, /从这里重写/);
+  assert.doesNotMatch(detailHtml, />修改</);
 });
 
 test('render helpers separate command status chips from disclosure controls and collapse file changes by default', () => {
