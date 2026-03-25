@@ -666,6 +666,44 @@ body[data-theme="dark"] .history-dialog-frame .session-item-subtitle {
   color: #9fb6cb;
 }
 
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-body {
+  scrollbar-color: rgba(159, 182, 203, 0.28) transparent;
+}
+
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-parent,
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-entry,
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-state {
+  border-color: rgba(159, 182, 203, 0.14);
+  background: rgba(24, 38, 53, 0.9);
+  color: #dce7f2;
+  box-shadow: none;
+}
+
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-entry-kind {
+  background: rgba(214, 226, 238, 0.1);
+  color: #dce7f2;
+}
+
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-meta-value,
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-history-path,
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-entry-path {
+  color: #9fb6cb;
+}
+
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-entry-name {
+  color: #edf4fb;
+}
+
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-state--error {
+  color: #ffb4ad;
+}
+
+body[data-theme="dark"] #project-dialog.project-dialog-frame .project-dialog-browser-submit {
+  background: linear-gradient(180deg, #28435d, #17293b);
+  color: #f5f9fd;
+  box-shadow: 0 12px 24px rgba(2, 8, 16, 0.34);
+}
+
 .layout[data-theme="dark"] #conversation-panel {
   background:
     linear-gradient(180deg, rgba(17, 26, 37, 0.92), rgba(11, 18, 27, 0.96));

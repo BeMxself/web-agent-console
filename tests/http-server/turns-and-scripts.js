@@ -328,6 +328,73 @@ test('http server lists local directories for the workspace file browser', async
   }
 });
 
+test('http server defaults local directory listing to HOME when the path is omitted or empty', async () => {
+  const previousHome = process.env.HOME;
+  const tempDir = await mkdtemp(join(tmpdir(), 'web-agent-console-local-home-'));
+  const docsDir = join(tempDir, 'docs');
+  const notesPath = join(tempDir, 'notes.txt');
+  await mkdir(docsDir, { recursive: true });
+  await writeFile(notesPath, 'hello\n', 'utf8');
+  process.env.HOME = tempDir;
+
+  const sessionService = toHttpProvider({
+    subscribe() {
+      return () => {};
+    },
+    getStatus() {
+      return {
+        overall: 'connected',
+        backend: { status: 'connected' },
+        relay: { status: 'online' },
+        lastError: null,
+      };
+    },
+  });
+  const server = createHttpServer({ provider: sessionService, publicDir: join(pocDir, 'public') });
+
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const expectedDirectory = {
+    kind: 'directory',
+    name: tempDir.split('/').at(-1),
+    path: tempDir,
+    parentPath: dirname(tempDir),
+    entries: [
+      {
+        kind: 'directory',
+        name: 'docs',
+        path: docsDir,
+      },
+      {
+        kind: 'file',
+        name: 'notes.txt',
+        path: notesPath,
+        mimeType: 'text/plain',
+        previewKind: 'text',
+      },
+    ],
+  };
+
+  try {
+    const omittedPathResponse = await fetch(`${baseUrl}/api/local-files/list`);
+    const emptyPathResponse = await fetch(`${baseUrl}/api/local-files/list?path=`);
+
+    assert.equal(omittedPathResponse.status, 200);
+    assert.deepEqual(await omittedPathResponse.json(), expectedDirectory);
+    assert.equal(emptyPathResponse.status, 200);
+    assert.deepEqual(await emptyPathResponse.json(), expectedDirectory);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
+    }
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('smoke script documents required codex prerequisites and README points to the PoC', () => {
   const smoke = readFileSync(join(pocDir, 'scripts', 'smoke-local.sh'), 'utf8');
   const startScript = readFileSync(join(pocDir, 'scripts', 'start-local-4533.sh'), 'utf8');

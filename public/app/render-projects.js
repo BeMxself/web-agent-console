@@ -213,6 +213,208 @@ export function renderHistoryItem(projectId, session, sectionKind) {
   ].join('');
 }
 
+export function renderProjectDialogContent(state) {
+  const dialogState = state.projectDialog;
+  if (!dialogState) {
+    return '';
+  }
+
+  const activeTab = dialogState.tab === 'manual' ? 'manual' : 'browse';
+  return [
+    '<form id="project-dialog-form" class="project-dialog-shell project-dialog-browser-shell">',
+    '<div class="dialog-header project-dialog-browser-header">',
+    '<div class="dialog-eyebrow">添加项目</div>',
+    '<button class="history-dialog-close" type="button" data-project-dialog-close="true" aria-label="关闭">×</button>',
+    '</div>',
+    '<div class="project-dialog-browser-input-row">',
+    '<label class="dialog-field project-dialog-browser-input-field">',
+    '<span class="sr-only">项目路径</span>',
+    '<input id="project-dialog-input" class="dialog-input project-dialog-browser-input" type="text" name="cwd" placeholder="~/Projects/my-workspace" autocomplete="off" />',
+    '</label>',
+    '<button class="project-dialog-browser-submit" type="submit" data-project-dialog-submit="true" aria-label="添加项目" title="添加项目">',
+    '<span class="project-dialog-browser-submit-icon" aria-hidden="true">',
+    '<svg viewBox="0 0 16 16" focusable="false">',
+    '<path d="M3.5 8h9" />',
+    '<path d="M8.5 3.5 13 8l-4.5 4.5" />',
+    '</svg>',
+    '</span>',
+    '<span class="sr-only">添加项目</span>',
+    '</button>',
+    '</div>',
+    renderProjectDialogTabs(activeTab),
+    '<div class="project-dialog-browser-body">',
+    activeTab === 'manual'
+      ? renderProjectDialogHistoryPanel(state.projects, dialogState.cwdDraft)
+      : renderProjectDialogDirectoryPanel(dialogState),
+    '</div>',
+    '</form>',
+  ].join('');
+}
+
+export function renderProjectDialogTabs(activeTab) {
+  return [
+    '<div class="project-dialog-browser-tabs" role="tablist" aria-label="添加项目视图">',
+    renderProjectDialogTab('manual', '历史项目', activeTab),
+    renderProjectDialogTab('browse', '目录树', activeTab),
+    '</div>',
+  ].join('');
+}
+
+export function renderProjectDialogTab(value, label, activeTab) {
+  const selected = value === activeTab;
+  return [
+    `<button class="history-dialog-tab project-dialog-browser-tab${selected ? ' history-dialog-tab--selected' : ''}" type="button" role="tab" aria-selected="${String(selected)}" data-project-dialog-tab="${value}">`,
+    escapeHtml(label),
+    '</button>',
+  ].join('');
+}
+
+export function renderProjectDialogHistoryPanel(projects = [], cwdDraft = '') {
+  const historyProjects = collectProjectHistoryProjects(projects);
+  if (!historyProjects.length) {
+    return [
+      '<section class="project-dialog-browser-panel project-dialog-browser-panel--history">',
+      '<div class="empty-list">暂时没有可复用的历史项目路径</div>',
+      '</section>',
+    ].join('');
+  }
+
+  const selectedCwd = String(cwdDraft ?? '').trim();
+  return [
+    '<section class="project-dialog-browser-panel project-dialog-browser-panel--history">',
+    '<div class="project-dialog-browser-meta">',
+    '<span class="project-dialog-browser-meta-label">历史项目</span>',
+    '<span class="project-dialog-browser-meta-value">点击后仅更新输入框草稿</span>',
+    '</div>',
+    '<div class="project-dialog-browser-history-list">',
+    historyProjects
+      .map((project) =>
+        renderProjectDialogHistoryItem(project, { selected: project.cwd === selectedCwd }),
+      )
+      .join(''),
+    '</div>',
+    '</section>',
+  ].join('');
+}
+
+export function renderProjectDialogHistoryItem(project, { selected = false } = {}) {
+  const path = String(project?.cwd ?? '').trim();
+  const displayName = String(project?.displayName ?? '').trim();
+  const title = displayName || path;
+  const subtitle = title && path && title !== path ? path : '';
+  const buttonClass = [
+    'session-item',
+    'session-item--history',
+    'project-dialog-browser-history-item',
+    selected ? 'session-item--focused' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return [
+    `<button class="${buttonClass}" type="button" data-project-dialog-history-path="${escapeHtml(path)}"${selected ? ' aria-current="true"' : ''}>`,
+    '<span class="session-item-inner">',
+    '<span class="session-item-title-row">',
+    `<span class="session-title">${escapeHtml(title || '未命名项目')}</span>`,
+    '</span>',
+    subtitle
+      ? `<span class="session-item-subtitle project-dialog-browser-history-path">${escapeHtml(subtitle)}</span>`
+      : '',
+    '</span>',
+    '</button>',
+  ].join('');
+}
+
+export function renderProjectDialogDirectoryPanel(dialogState) {
+  const browser = dialogState.directoryBrowser ?? {};
+  const currentPath = browser.currentPath ?? dialogState.cwdDraft ?? '';
+  const parentPath = browser.parentPath ?? '';
+
+  return [
+    '<section class="project-dialog-browser-panel project-dialog-browser-panel--directory">',
+    '<div class="project-dialog-browser-toolbar">',
+    '<div class="project-dialog-browser-meta">',
+    '<span class="project-dialog-browser-meta-label">当前目录</span>',
+    `<span class="project-dialog-browser-meta-value">${escapeHtml(currentPath || '未选择')}</span>`,
+    '</div>',
+    `<button class="project-dialog-browser-parent${parentPath ? '' : ' project-dialog-browser-parent--disabled'}" type="button" ${parentPath ? `data-project-dialog-parent-path="${escapeHtml(parentPath)}"` : 'disabled'}>返回上一级</button>`,
+    '</div>',
+    renderProjectDialogDirectoryEntries(browser),
+    '</section>',
+  ].join('');
+}
+
+export function renderProjectDialogDirectoryEntries(browser) {
+  if (browser.loading) {
+    return '<div class="project-dialog-browser-state">正在加载目录…</div>';
+  }
+
+  if (browser.error) {
+    return `<div class="project-dialog-browser-state project-dialog-browser-state--error">${escapeHtml(browser.error)}</div>`;
+  }
+
+  const entries = Array.isArray(browser.entries) ? browser.entries : [];
+  if (!entries.length) {
+    return '<div class="empty-list">当前目录暂无可用条目</div>';
+  }
+
+  return [
+    '<div class="project-dialog-browser-entry-list">',
+    entries.map((entry) => renderProjectDialogDirectoryEntry(entry)).join(''),
+    '</div>',
+  ].join('');
+}
+
+export function renderProjectDialogDirectoryEntry(entry) {
+  const kind = entry?.kind === 'directory' ? 'directory' : 'file';
+  const kindLabel = kind === 'directory' ? '目录' : '文件';
+  const titleMarkup = [
+    '<span class="project-dialog-browser-entry-copy">',
+    `<span class="project-dialog-browser-entry-name">${escapeHtml(entry?.name ?? '未命名条目')}</span>`,
+    `<span class="project-dialog-browser-entry-path">${escapeHtml(entry?.path ?? '')}</span>`,
+    '</span>',
+  ].join('');
+
+  if (kind === 'directory') {
+    return [
+      `<button class="project-dialog-browser-entry project-dialog-browser-entry--directory" type="button" data-project-dialog-entry-path="${escapeHtml(entry?.path ?? '')}" data-project-dialog-entry-kind="directory">`,
+      `<span class="project-dialog-browser-entry-kind">${kindLabel}</span>`,
+      titleMarkup,
+      '</button>',
+    ].join('');
+  }
+
+  return [
+    '<div class="project-dialog-browser-entry project-dialog-browser-entry--file" aria-disabled="true">',
+    `<span class="project-dialog-browser-entry-kind">${kindLabel}</span>`,
+    titleMarkup,
+    '</div>',
+  ].join('');
+}
+
+export function collectProjectHistoryPaths(projects = []) {
+  return collectProjectHistoryProjects(projects).map((project) => project.cwd);
+}
+
+export function collectProjectHistoryProjects(projects = []) {
+  const seen = new Set();
+  const historyProjects = [];
+  for (const project of projects) {
+    const path = String(project?.cwd ?? '').trim();
+    if (!path || seen.has(path)) {
+      continue;
+    }
+
+    seen.add(path);
+    historyProjects.push({
+      cwd: path,
+      displayName: String(project?.displayName ?? '').trim() || path,
+    });
+  }
+
+  return historyProjects;
+}
+
 export function renderSessionItemBody(
   session,
   {

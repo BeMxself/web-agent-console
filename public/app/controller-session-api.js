@@ -50,6 +50,38 @@ import {
 } from './render-activity.js';
 import { findProject, findProjectBySessionId, findThreadMeta } from './project-utils.js';
 
+function normalizeProjectDialogTab(tab) {
+  return tab === 'manual' ? 'manual' : 'browse';
+}
+
+function shouldReloadProjectDialogBrowse(projectDialog) {
+  if (!projectDialog) {
+    return false;
+  }
+
+  const directoryBrowser = projectDialog.directoryBrowser ?? {};
+  const cwdDraft = String(projectDialog.cwdDraft ?? '').trim();
+  const currentPath = String(directoryBrowser.currentPath ?? '').trim();
+
+  if (directoryBrowser.loading) {
+    return false;
+  }
+
+  if (projectDialog.directoryBrowserResolved !== true) {
+    return true;
+  }
+
+  if (directoryBrowser.error) {
+    return true;
+  }
+
+  if (!cwdDraft) {
+    return !currentPath;
+  }
+
+  return currentPath !== cwdDraft;
+}
+
 export function createSessionControllerApi(ctx) {
   return {
     getState() {
@@ -384,6 +416,115 @@ export function createSessionControllerApi(ctx) {
     selectHistoryDialogTab(tab) {
       ctx.applyAction({ type: 'history_dialog_tab_selected', payload: { tab } });
       return ctx.state.historyDialogTab;
+    },
+    async openProjectDialog() {
+      ctx.applyAction({ type: 'project_dialog_opened' });
+      openDialog(ctx.documentRef?.querySelector?.('#project-dialog'));
+      focusProjectInput(ctx.documentRef);
+      await ctx.controller.loadProjectDialogDirectory('');
+      return ctx.state.projectDialog;
+    },
+    closeProjectDialog() {
+      ctx.applyAction({ type: 'project_dialog_closed' });
+      closeDialog(ctx.documentRef?.querySelector?.('#project-dialog'));
+      return null;
+    },
+    setProjectDialogCwdDraft(cwdDraft) {
+      ctx.applyAction({
+        type: 'project_dialog_cwd_draft_changed',
+        payload: {
+          cwdDraft: String(cwdDraft ?? ''),
+          invalidateDirectoryRequest: true,
+        },
+      });
+      return ctx.state.projectDialog?.cwdDraft ?? '';
+    },
+    async selectProjectDialogTab(tab) {
+      const previousTab = ctx.state.projectDialog?.tab ?? null;
+      const nextTab = normalizeProjectDialogTab(tab);
+      ctx.applyAction({
+        type: 'project_dialog_tab_selected',
+        payload: { tab: nextTab },
+      });
+      if (
+        nextTab === 'browse' &&
+        previousTab !== 'browse' &&
+        shouldReloadProjectDialogBrowse(ctx.state.projectDialog)
+      ) {
+        await ctx.controller.loadProjectDialogDirectory();
+      }
+      return ctx.state.projectDialog?.tab ?? null;
+    },
+    async loadProjectDialogDirectory(path = null) {
+      if (!ctx.state.projectDialog) {
+        return null;
+      }
+
+      const requestedPath = String(path ?? ctx.state.projectDialog.cwdDraft ?? '').trim();
+      const existingRootPath = ctx.state.projectDialog.directoryBrowser?.rootPath ?? null;
+      ctx.projectDialogDirectoryRequestSeq = (ctx.projectDialogDirectoryRequestSeq ?? 0) + 1;
+      const requestId = ctx.projectDialogDirectoryRequestSeq;
+      ctx.applyAction({
+        type: 'project_dialog_directory_requested',
+        payload: {
+          requestId,
+          rootPath: existingRootPath,
+          path: requestedPath || null,
+          cwdDraft: requestedPath,
+        },
+      });
+
+      try {
+        const directory = await ctx.requestProtectedJson(buildLocalFileListUrl(requestedPath));
+        if (!directory) {
+          return null;
+        }
+
+        ctx.applyAction({
+          type: 'project_dialog_directory_loaded',
+          payload: {
+            requestId,
+            rootPath: existingRootPath ?? directory.path ?? null,
+            cwdDraft: directory.path ?? requestedPath,
+            directory,
+          },
+        });
+        return ctx.state.projectDialog?.directoryBrowser ?? null;
+      } catch (error) {
+        ctx.applyAction({
+          type: 'project_dialog_directory_load_failed',
+          payload: {
+            requestId,
+            rootPath: existingRootPath,
+            path: requestedPath || null,
+            cwdDraft: requestedPath,
+            error: error?.message ?? '无法加载目录。',
+          },
+        });
+        return ctx.state.projectDialog?.directoryBrowser ?? null;
+      }
+    },
+    async openProjectDialogDirectoryEntry(path, kind) {
+      const normalizedPath = String(path ?? '').trim();
+      if (!normalizedPath) {
+        return null;
+      }
+
+      if (String(kind ?? '').trim() !== 'directory') {
+        return ctx.state.projectDialog?.cwdDraft ?? null;
+      }
+
+      return ctx.controller.loadProjectDialogDirectory(normalizedPath);
+    },
+    async openProjectDialogParentDirectory(path = null) {
+      const normalizedPath = String(
+        path ?? ctx.state.projectDialog?.directoryBrowser?.parentPath ?? '',
+      ).trim();
+      if (!normalizedPath) {
+        return null;
+      }
+
+      return ctx.controller.loadProjectDialogDirectory(normalizedPath);
     },
     setComposerDraft(text) {
       ctx.applyAction({ type: 'composer_text_changed', payload: { text } });
@@ -774,16 +915,6 @@ export function createSessionControllerApi(ctx) {
       link.click?.();
       ctx.documentRef?.body?.removeChild?.(link);
       return { url, name };
-    },
-    openProjectDialog() {
-      openDialog(ctx.documentRef?.querySelector?.('#project-dialog'));
-      focusProjectInput(ctx.documentRef);
-      return true;
-    },
-    closeProjectDialog() {
-      closeDialog(ctx.documentRef?.querySelector?.('#project-dialog'));
-      clearProjectInput(ctx.documentRef);
-      return null;
     },
     openRenameDialog(sessionId = ctx.state.selectedSessionId) {
       const renameId = sessionId ?? ctx.state.selectedSessionId;

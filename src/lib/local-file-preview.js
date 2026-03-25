@@ -1,5 +1,6 @@
 import { basename, dirname, extname, isAbsolute, join } from 'node:path';
 import { readFile, readdir, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 
 const TEXT_MIME_TYPES = new Set([
   'application/json',
@@ -104,7 +105,7 @@ export async function readLocalFileContent(filePath) {
 }
 
 export async function readLocalDirectory(dirPath) {
-  const normalizedPath = assertAbsoluteLocalPath(dirPath);
+  const normalizedPath = assertAbsoluteLocalPath(resolveLocalDirectoryPath(dirPath));
   const directoryStats = await statExistingLocalPath(normalizedPath);
   if (!directoryStats.isDirectory()) {
     const error = new Error('Only directories can be listed');
@@ -163,6 +164,20 @@ export async function readLocalDirectory(dirPath) {
     parentPath: parentPath === normalizedPath ? null : parentPath,
     entries,
   };
+}
+
+function resolveLocalDirectoryPath(dirPath) {
+  const normalizedPath = String(dirPath ?? '').trim();
+  if (normalizedPath) {
+    return normalizedPath;
+  }
+
+  const explicitHome = String(process.env.HOME ?? '').trim();
+  if (explicitHome) {
+    return explicitHome;
+  }
+
+  return String(homedir() ?? '').trim();
 }
 
 export function buildLocalFileContentUrl(filePath, { download = false } = {}) {

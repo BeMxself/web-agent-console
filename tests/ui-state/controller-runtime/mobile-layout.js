@@ -11,6 +11,103 @@ import {
   jsonErrorResponse,
 } from '../shared.js';
 
+function createFakeBoundElement(overrides = {}) {
+  const listeners = new Map();
+  const elements = new Map();
+  return {
+    innerHTML: '',
+    value: '',
+    open: false,
+    hidden: false,
+    dataset: {},
+    addEventListener(type, handler) {
+      if (!type || typeof handler !== 'function') {
+        return;
+      }
+
+      const entries = listeners.get(type) ?? [];
+      entries.push(handler);
+      listeners.set(type, entries);
+    },
+    dispatchEvent(event) {
+      const type = typeof event === 'string' ? event : event?.type;
+      if (!type) {
+        return false;
+      }
+
+      for (const handler of listeners.get(type) ?? []) {
+        handler.call(this, event);
+      }
+
+      return true;
+    },
+    focus() {},
+    querySelector(selector) {
+      return elements.get(selector) ?? null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+    registerElement(selector, element) {
+      elements.set(selector, element);
+    },
+    showModal() {
+      this.open = true;
+    },
+    close() {
+      this.open = false;
+      this.dispatchEvent({ type: 'close' });
+    },
+    ...overrides,
+  };
+}
+
+function attachProjectDialog(fakeDocument) {
+  const projectDialog = createFakeBoundElement();
+  const projectDialogForm = createFakeBoundElement();
+  const projectDialogInput = createFakeBoundElement();
+  projectDialog.registerElement('#project-dialog-form', projectDialogForm);
+  projectDialog.registerElement('#project-dialog-input', projectDialogInput);
+  const originalQuerySelector = fakeDocument.querySelector.bind(fakeDocument);
+
+  fakeDocument.projectDialog = projectDialog;
+  fakeDocument.projectDialogForm = projectDialogForm;
+  fakeDocument.projectDialogInput = projectDialogInput;
+  fakeDocument.querySelector = (selector) => {
+    if (selector === '#project-dialog') {
+      return projectDialog;
+    }
+
+    if (selector === '#project-dialog-form') {
+      return projectDialogForm;
+    }
+
+    if (selector === '#project-dialog-input') {
+      return projectDialogInput;
+    }
+
+    return originalQuerySelector(selector);
+  };
+
+  return {
+    projectDialog,
+    projectDialogForm,
+    projectDialogInput,
+  };
+}
+
+function createClosestTarget(selector, dataset = {}) {
+  return {
+    closest(candidate) {
+      if (candidate !== selector) {
+        return null;
+      }
+
+      return { dataset };
+    },
+  };
+}
+
 
 test('browser app syncs resizable sidebar widths and can hide the conversation nav controls', async () => {
   const fakeDocument = createFakeDocument();
@@ -167,6 +264,221 @@ test('browser app uses a full-screen mobile drawer for sessions and activity on 
 
   assert.equal(app.getState().mobileDrawerOpen, false);
   assert.equal(fakeDocument.mobileDrawer.open, false);
+});
+
+test('browser app renders the add-project dialog shell and keeps draft navigation inside the dialog on mobile', async () => {
+  const fakeDocument = createFakeDocument({ mobile: true });
+  const { projectDialog, projectDialogInput } = attachProjectDialog(fakeDocument);
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'Workspace Alpha',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread', cwd: '/tmp/workspace-a' }],
+              historySessions: { active: [], archived: [] },
+            },
+            {
+              id: '/tmp/workspace-b',
+              cwd: '/tmp/workspace-b',
+              displayName: 'Workspace Beta',
+              collapsed: false,
+              focusedSessions: [],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'songmingxu',
+          path: '/Users/songmingxu',
+          parentPath: '/Users',
+          entries: [
+            { kind: 'directory', name: 'Projects', path: '/Users/songmingxu/Projects' },
+            {
+              kind: 'file',
+              name: 'notes.txt',
+              path: '/Users/songmingxu/notes.txt',
+              mimeType: 'text/plain',
+              previewKind: 'text',
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/local-files/list?path=%2FUsers%2Fsongmingxu%2FProjects') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'Projects',
+          path: '/Users/songmingxu/Projects',
+          parentPath: '/Users/songmingxu',
+          entries: [
+            {
+              kind: 'directory',
+              name: 'web-agent-console',
+              path: '/Users/songmingxu/Projects/web-agent-console',
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/status') {
+        return jsonResponse({
+          overall: 'connected',
+          backend: { status: 'connected' },
+          relay: { status: 'online' },
+          lastError: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+  await app.openProjectDialog();
+
+  assert.equal(projectDialog.open, true);
+  assert.match(projectDialog.innerHTML, /添加项目/);
+  assert.match(projectDialog.innerHTML, /data-project-dialog-close="true"/);
+  assert.doesNotMatch(projectDialog.innerHTML, /dialog-title/);
+  assert.doesNotMatch(projectDialog.innerHTML, />取消</);
+  assert.match(projectDialog.innerHTML, /data-project-dialog-submit="true"/);
+  assert.match(projectDialog.innerHTML, /历史项目/);
+  assert.match(projectDialog.innerHTML, /目录树/);
+  assert.match(projectDialog.innerHTML, /当前目录/);
+  assert.match(projectDialog.innerHTML, /\/Users\/songmingxu/);
+  assert.match(projectDialog.innerHTML, /Projects/);
+  assert.match(projectDialog.innerHTML, /notes\.txt/);
+  assert.equal(projectDialogInput.value, '/Users/songmingxu');
+  assert.equal(fakeDocument.conversationTitle.textContent, 'Focus thread');
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-tab]', {
+      projectDialogTab: 'manual',
+    }),
+  });
+
+  assert.equal(app.getState().projectDialog.tab, 'manual');
+  assert.match(projectDialog.innerHTML, /Workspace Alpha/);
+  assert.match(projectDialog.innerHTML, /Workspace Beta/);
+  assert.match(projectDialog.innerHTML, /\/tmp\/workspace-a/);
+  assert.match(projectDialog.innerHTML, /\/tmp\/workspace-b/);
+  assert.doesNotMatch(
+    projectDialog.innerHTML,
+    /data-project-dialog-history-path="\/tmp\/workspace-b"[^>]*aria-current="true"/,
+  );
+
+  projectDialogInput.value = '/tmp/workspace-b';
+  projectDialogInput.dispatchEvent({ type: 'input' });
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/tmp/workspace-b');
+  assert.match(
+    projectDialog.innerHTML,
+    /data-project-dialog-history-path="\/tmp\/workspace-b"[^>]*aria-current="true"/,
+  );
+  assert.doesNotMatch(
+    projectDialog.innerHTML,
+    /data-project-dialog-history-path="\/tmp\/workspace-a"[^>]*aria-current="true"/,
+  );
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-history-path]', {
+      projectDialogHistoryPath: '/tmp/workspace-b',
+    }),
+  });
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/tmp/workspace-b');
+  assert.equal(projectDialogInput.value, '/tmp/workspace-b');
+  assert.equal(fakeDocument.filePreviewDialog.open, false);
+  assert.equal(fakeDocument.conversationTitle.textContent, 'Focus thread');
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-tab]', {
+      projectDialogTab: 'browse',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(app.getState().projectDialog.tab, 'browse');
+  assert.equal(app.getState().projectDialog.cwdDraft, '/tmp/workspace-b');
+  assert.equal(app.getState().projectDialog.directoryBrowser.currentPath, '/tmp/workspace-b');
+  assert.equal(fakeDocument.filePreviewDialog.open, false);
+  assert.equal(app.getState().selectedSessionId, 'thread-1');
+  assert.equal(projectDialog.open, true);
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-entry-path]', {
+      projectDialogEntryPath: '/Users/songmingxu/Projects',
+      projectDialogEntryKind: 'directory',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu/Projects',
+  );
+  assert.equal(projectDialogInput.value, '/Users/songmingxu/Projects');
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-parent-path]', {
+      projectDialogParentPath: '/Users/songmingxu',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu');
+  assert.equal(app.getState().projectDialog.directoryBrowser.currentPath, '/Users/songmingxu');
+  assert.equal(projectDialogInput.value, '/Users/songmingxu');
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-entry-path]', {
+      projectDialogEntryPath: '/Users/songmingxu/notes.txt',
+      projectDialogEntryKind: 'file',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu');
+  assert.equal(fakeDocument.filePreviewDialog.open, false);
+  assert.equal(app.getState().selectedSessionId, 'thread-1');
+  assert.equal(projectDialog.open, true);
 });
 
 test('browser app enables send only when a selected session has draft text and no active turn', async () => {

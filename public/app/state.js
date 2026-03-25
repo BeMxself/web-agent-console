@@ -66,12 +66,27 @@ function createInitialFileBrowserState() {
   };
 }
 
+function createInitialProjectDialogState() {
+  return {
+    cwdDraft: '',
+    tab: 'browse',
+    activeDirectoryRequestId: null,
+    directoryBrowserResolved: false,
+    directoryBrowser: createInitialFileBrowserState(),
+  };
+}
+
+function normalizeProjectDialogTab(tab) {
+  return tab === 'manual' ? 'manual' : 'browse';
+}
+
 export const initialState = {
   projects: [],
   selectedSessionId: null,
   pendingSessionProjectId: null,
   sessionDetailsById: {},
   subagentDialog: null,
+  projectDialog: null,
   approvalMode: 'auto-approve',
   sessionOptions: createInitialSessionOptions(),
   sessionSettingsById: {},
@@ -213,6 +228,78 @@ export function reduceState(state = initialState, action) {
         historyDialogProjectId: null,
         historyDialogTab: 'active',
       };
+    case 'project_dialog_opened':
+      return {
+        ...state,
+        projectDialog: createInitialProjectDialogState(),
+      };
+    case 'project_dialog_closed':
+      return {
+        ...state,
+        projectDialog: null,
+      };
+    case 'project_dialog_cwd_draft_changed':
+      if (!state.projectDialog) {
+        return state;
+      }
+
+      {
+        const nextCwdDraft = action.payload?.cwdDraft ?? '';
+        const invalidatesDirectoryRequest =
+          action.payload?.invalidateDirectoryRequest === true &&
+          (state.projectDialog.activeDirectoryRequestId != null ||
+            nextCwdDraft !== state.projectDialog.cwdDraft);
+
+        return {
+          ...state,
+          projectDialog: {
+            ...state.projectDialog,
+            cwdDraft: nextCwdDraft,
+            activeDirectoryRequestId: invalidatesDirectoryRequest
+              ? null
+              : state.projectDialog.activeDirectoryRequestId,
+            directoryBrowserResolved: invalidatesDirectoryRequest
+              ? false
+              : state.projectDialog.directoryBrowserResolved,
+            directoryBrowser:
+              invalidatesDirectoryRequest
+                ? {
+                    ...state.projectDialog.directoryBrowser,
+                    loading: false,
+                  }
+                : state.projectDialog.directoryBrowser,
+          },
+        };
+      }
+    case 'project_dialog_tab_selected':
+      if (!state.projectDialog) {
+        return state;
+      }
+
+      {
+        const nextTab = normalizeProjectDialogTab(action.payload?.tab);
+        const invalidatesDirectoryRequest =
+          nextTab === 'manual' && state.projectDialog.activeDirectoryRequestId != null;
+        return {
+          ...state,
+          projectDialog: {
+            ...state.projectDialog,
+            tab: nextTab,
+            activeDirectoryRequestId: invalidatesDirectoryRequest
+              ? null
+              : state.projectDialog.activeDirectoryRequestId,
+            directoryBrowserResolved: invalidatesDirectoryRequest
+              ? false
+              : state.projectDialog.directoryBrowserResolved,
+            directoryBrowser: invalidatesDirectoryRequest
+              ? {
+                  ...state.projectDialog.directoryBrowser,
+                  loading: false,
+                }
+              : state.projectDialog.directoryBrowser,
+          },
+        };
+      }
     case 'composer_text_changed':
       return {
         ...state,
@@ -429,6 +516,93 @@ export function reduceState(state = initialState, action) {
           entries: [],
           loading: false,
           error: action.payload.error ?? '无法加载工作区文件。',
+        },
+      };
+    case 'project_dialog_directory_requested':
+      if (!state.projectDialog) {
+        return state;
+      }
+
+      return {
+        ...state,
+        projectDialog: {
+          ...state.projectDialog,
+          activeDirectoryRequestId: action.payload.requestId ?? null,
+          directoryBrowserResolved: false,
+          cwdDraft: action.payload?.cwdDraft ?? action.payload?.path ?? '',
+          directoryBrowser: {
+            rootPath: action.payload.rootPath ?? state.projectDialog.directoryBrowser?.rootPath ?? null,
+            currentPath:
+              action.payload.path ??
+              action.payload.rootPath ??
+              state.projectDialog.directoryBrowser?.currentPath ??
+              null,
+            parentPath: null,
+            entries: [],
+            loading: true,
+            error: null,
+          },
+        },
+      };
+    case 'project_dialog_directory_loaded':
+      if (!state.projectDialog) {
+        return state;
+      }
+      if (action.payload.requestId !== state.projectDialog.activeDirectoryRequestId) {
+        return state;
+      }
+
+      return {
+        ...state,
+        projectDialog: {
+          ...state.projectDialog,
+          activeDirectoryRequestId: null,
+          directoryBrowserResolved: true,
+          cwdDraft:
+            action.payload.directory?.path ??
+            action.payload.cwdDraft ??
+            state.projectDialog.cwdDraft,
+          directoryBrowser: {
+            rootPath:
+              action.payload.rootPath ??
+              state.projectDialog.directoryBrowser?.rootPath ??
+              action.payload.directory?.path ??
+              null,
+            currentPath: action.payload.directory?.path ?? action.payload.rootPath ?? null,
+            parentPath: action.payload.directory?.parentPath ?? null,
+            entries: action.payload.directory?.entries ?? [],
+            loading: false,
+            error: null,
+          },
+        },
+      };
+    case 'project_dialog_directory_load_failed':
+      if (!state.projectDialog) {
+        return state;
+      }
+      if (action.payload.requestId !== state.projectDialog.activeDirectoryRequestId) {
+        return state;
+      }
+
+      return {
+        ...state,
+        projectDialog: {
+          ...state.projectDialog,
+          activeDirectoryRequestId: null,
+          directoryBrowserResolved: true,
+          cwdDraft: action.payload?.cwdDraft ?? action.payload?.path ?? state.projectDialog.cwdDraft,
+          directoryBrowser: {
+            rootPath: action.payload.rootPath ?? state.projectDialog.directoryBrowser?.rootPath ?? null,
+            currentPath:
+              action.payload.path ??
+              state.projectDialog.directoryBrowser?.currentPath ??
+              action.payload.rootPath ??
+              null,
+            parentPath: null,
+            entries: [],
+            loading: false,
+            error: action.payload.error ?? '无法加载目录。',
+          },
         },
       };
     case 'session_detail_loaded':

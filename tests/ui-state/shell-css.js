@@ -379,6 +379,69 @@ test('mobile history dialog css keeps a stable full-height viewport instead of c
   );
 });
 
+test('project dialog shell html uses a renderer-owned frame instead of static title-and-footer controls', () => {
+  const html = readPublicFile('index.html');
+
+  assert.match(html, /<dialog id="project-dialog" class="project-dialog-frame"><\/dialog>/);
+  assert.doesNotMatch(html, /把工作区加入左侧项目树/);
+  assert.doesNotMatch(html, /data-project-dialog-close="true">取消<\/button>/);
+  assert.doesNotMatch(html, /添加项目<\/button>/);
+});
+
+test('project dialog css keeps a single internal scroll region with inline submit and tab shell', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /#project-dialog\.project-dialog-frame\s*\{[^}]*max-height:\s*min\(720px,\s*calc\(100vh - 48px\)\);[^}]*overflow:\s*hidden;/s,
+  );
+  assert.match(
+    css,
+    /\.project-dialog-browser-shell\s*\{[^}]*grid-template-rows:\s*auto\s+auto\s+auto\s+minmax\(0,\s*1fr\);[^}]*height:\s*min\(720px,\s*calc\(100vh - 48px\)\);[^}]*max-height:\s*100%;[^}]*overflow:\s*hidden;/s,
+  );
+  assert.match(
+    css,
+    /\.project-dialog-browser-input-row\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;[^}]*align-items:\s*stretch;/s,
+  );
+  assert.match(
+    css,
+    /\.project-dialog-browser-submit\s*\{[^}]*display:\s*inline-flex;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;[^}]*min-height:\s*(46|47|48|49|50)px;[^}]*aspect-ratio:\s*1\s*\/\s*1;/s,
+  );
+  assert.match(
+    css,
+    /\.project-dialog-browser-tabs\s*\{[^}]*display:\s*flex;[^}]*gap:\s*(8|9|10|11|12)px;/s,
+  );
+  assert.match(
+    css,
+    /\.project-dialog-browser-body\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s,
+  );
+  assert.doesNotMatch(
+    css,
+    /\.project-dialog-browser-shell\s*\{[^}]*overflow-y:\s*auto;/s,
+  );
+});
+
+test('mobile project dialog css keeps the dialog within the viewport with the body as the only scrollable region', () => {
+  const css = readPublicFile('app.css');
+
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*#project-dialog\.project-dialog-frame\s*\{[^}]*width:\s*calc\(100vw - 24px\);[^}]*height:\s*calc\(100dvh - 24px\);[^}]*max-height:\s*calc\(100dvh - 24px\);/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.project-dialog-browser-shell\s*\{[^}]*height:\s*100%;[^}]*max-height:\s*100%;/s,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*\.project-dialog-browser-body\s*\{[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s,
+  );
+  assert.doesNotMatch(
+    css,
+    /@media \(max-width: 760px\)\s*\{[\s\S]*#project-dialog\.project-dialog-frame\s*\{[^}]*overflow:\s*auto;/s,
+  );
+});
+
 test('theme css adds a dark palette and transparent icon toggle affordance', () => {
   const css = readPublicFile('app.css');
 
@@ -429,6 +492,10 @@ test('theme css adds a dark palette and transparent icon toggle affordance', () 
   assert.match(
     css,
     /body\[data-theme="dark"\]\s+\.history-dialog-frame\s+\.session-item\s*\{[^}]*background:\s*rgba\([^)]*\);[^}]*color:\s*#dce7f2;/s,
+  );
+  assert.match(
+    css,
+    /body\[data-theme="dark"\]\s+#project-dialog\.project-dialog-frame\s+\.project-dialog-browser-submit\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#28435d,\s*#17293b\);[^}]*color:\s*#f5f9fd;/s,
   );
   assert.match(
     css,

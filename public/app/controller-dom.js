@@ -3,7 +3,6 @@ import {
   PROJECT_PANEL_LABEL,
 } from './constants.js';
 import {
-  clearProjectInput,
   closeDialog,
   escapeSelectorValue,
   getCachedMarkup,
@@ -47,7 +46,11 @@ import {
   syncTheme,
 } from './render-shell.js';
 import { renderApprovalModeControls } from './render-settings.js';
-import { renderHistoryDialogContent } from './render-projects.js';
+import {
+  collectProjectHistoryProjects,
+  renderHistoryDialogContent,
+  renderProjectDialogContent,
+} from './render-projects.js';
 import { renderFilePreviewDialog } from './render-file-preview.js';
 import { renderConversationNavigation } from './render-turn-items.js';
 
@@ -227,6 +230,48 @@ export function bindActivityPanelActions(ctx, root) {
   });
 }
 
+function captureProjectDialogContinuity(documentRef, projectDialog) {
+  const dialogInput =
+    projectDialog?.querySelector?.('#project-dialog-input') ??
+    documentRef?.querySelector?.('#project-dialog-input') ??
+    null;
+  const dialogBody = projectDialog?.querySelector?.('.project-dialog-browser-body') ?? null;
+  const activeElement = documentRef?.activeElement ?? null;
+
+  return {
+    restoreInputFocus: dialogInput != null && activeElement === dialogInput,
+    selectionStart: Number(dialogInput?.selectionStart ?? 0),
+    selectionEnd: Number(dialogInput?.selectionEnd ?? dialogInput?.selectionStart ?? 0),
+    bodyScrollTop: Number(dialogBody?.scrollTop ?? 0),
+  };
+}
+
+function restoreProjectDialogContinuity(projectDialog, dialogInput, continuity) {
+  if (!continuity) {
+    return;
+  }
+
+  const dialogBody = projectDialog?.querySelector?.('.project-dialog-browser-body') ?? null;
+  if (dialogBody && Number.isFinite(continuity.bodyScrollTop)) {
+    dialogBody.scrollTop = continuity.bodyScrollTop;
+  }
+
+  if (!continuity.restoreInputFocus || !dialogInput?.focus) {
+    return;
+  }
+
+  dialogInput.focus();
+  if (typeof dialogInput.setSelectionRange === 'function') {
+    const valueLength = String(dialogInput.value ?? '').length;
+    const nextSelectionStart = Math.max(0, Math.min(continuity.selectionStart, valueLength));
+    const nextSelectionEnd = Math.max(
+      nextSelectionStart,
+      Math.min(continuity.selectionEnd, valueLength),
+    );
+    dialogInput.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+  }
+}
+
 export function renderApp(ctx) {
   if (!ctx.documentRef) {
     return;
@@ -246,6 +291,7 @@ export function renderApp(ctx) {
     const mobileDrawer = ctx.documentRef.querySelector('#mobile-drawer');
     const historyDialog = ctx.documentRef.querySelector('#history-dialog');
     const filePreviewDialog = ctx.documentRef.querySelector('#file-preview-dialog');
+    const projectDialog = ctx.documentRef.querySelector('#project-dialog');
     const renameDialog = ctx.documentRef.querySelector('#rename-dialog');
     const projectPanelToggle = ctx.documentRef.querySelector('#project-panel-toggle');
     const activityPanelToggle = ctx.documentRef.querySelector('#activity-panel-toggle');
@@ -611,6 +657,75 @@ export function renderApp(ctx) {
           historyDialog.close();
         } else {
           historyDialog.open = false;
+        }
+      }
+    }
+
+    if (projectDialog) {
+      if (ctx.state.projectDialog) {
+        const projectDialogCache =
+          ctx.renderCache.projectDialog ?? {
+            keyParts: null,
+            html: '',
+          };
+        ctx.renderCache.projectDialog = projectDialogCache;
+        const projectDialogMarkup = getCachedMarkup(
+          projectDialogCache,
+          ctx.state.projectDialog.tab === 'manual'
+            ? [
+                ctx.state.projectDialog.tab,
+                ctx.state.projectDialog.cwdDraft ?? '',
+                JSON.stringify(collectProjectHistoryProjects(ctx.state.projects)),
+              ]
+            : [
+                ctx.state.projectDialog.tab,
+                ctx.state.projectDialog.cwdDraft ?? '',
+                ctx.state.projectDialog.directoryBrowser?.currentPath ?? null,
+                ctx.state.projectDialog.directoryBrowser?.parentPath ?? null,
+                ctx.state.projectDialog.directoryBrowser?.entries ?? null,
+                ctx.state.projectDialog.directoryBrowser?.loading ?? false,
+                ctx.state.projectDialog.directoryBrowser?.error ?? null,
+              ],
+          () => renderProjectDialogContent(ctx.state),
+        );
+        const dialogContinuity = projectDialogMarkup.changed
+          ? captureProjectDialogContinuity(ctx.documentRef, projectDialog)
+          : null;
+        if (projectDialogMarkup.changed) {
+          projectDialog.innerHTML = projectDialogMarkup.html;
+        }
+
+        const renderedProjectDialogInput =
+          projectDialog.querySelector?.('#project-dialog-input') ??
+          ctx.documentRef.querySelector('#project-dialog-input');
+        if (renderedProjectDialogInput) {
+          const nextProjectDialogDraft = ctx.state.projectDialog.cwdDraft ?? '';
+          if (renderedProjectDialogInput.value !== nextProjectDialogDraft) {
+            renderedProjectDialogInput.value = nextProjectDialogDraft;
+          }
+        }
+
+        openDialog(projectDialog);
+        restoreProjectDialogContinuity(
+          projectDialog,
+          renderedProjectDialogInput,
+          dialogContinuity,
+        );
+      } else {
+        if (ctx.renderCache.projectDialog) {
+          ctx.renderCache.projectDialog.keyParts = null;
+          ctx.renderCache.projectDialog.html = '';
+        }
+        const renderedProjectDialogInput =
+          projectDialog.querySelector?.('#project-dialog-input') ??
+          ctx.documentRef.querySelector('#project-dialog-input');
+        if (renderedProjectDialogInput) {
+          renderedProjectDialogInput.value = '';
+        }
+        projectDialog.innerHTML = '';
+        if (projectDialog.open) {
+          closeDialog(projectDialog);
+        }
       }
     }
 
@@ -634,7 +749,6 @@ export function renderApp(ctx) {
         closeDialog(filePreviewDialog);
       }
     }
-  }
 }
 
 export function bindControllerDocumentEvents(ctx) {
@@ -822,15 +936,77 @@ export function bindControllerDocumentEvents(ctx) {
       }
     });
 
-    for (const button of projectDialog?.querySelectorAll?.('[data-project-dialog-close]') ?? []) {
-      button.addEventListener('click', () => {
+    projectDialog?.addEventListener?.('click', (event) => {
+      const closeButton = event?.target?.closest?.('[data-project-dialog-close]');
+      if (closeButton) {
+        event.preventDefault?.();
+        ctx.controller.closeProjectDialog();
+        return;
+      }
+
+      const tabButton = event?.target?.closest?.('[data-project-dialog-tab]');
+      if (tabButton) {
+        event.preventDefault?.();
+        void ctx.controller.selectProjectDialogTab(tabButton.dataset.projectDialogTab);
+        return;
+      }
+
+      const historyButton = event?.target?.closest?.('[data-project-dialog-history-path]');
+      if (historyButton) {
+        event.preventDefault?.();
+        ctx.controller.setProjectDialogCwdDraft(historyButton.dataset.projectDialogHistoryPath);
+        return;
+      }
+
+      const parentButton = event?.target?.closest?.('[data-project-dialog-parent-path]');
+      if (parentButton) {
+        event.preventDefault?.();
+        void ctx.controller.openProjectDialogParentDirectory(
+          parentButton.dataset.projectDialogParentPath,
+        );
+        return;
+      }
+
+      const entryButton = event?.target?.closest?.('[data-project-dialog-entry-path]');
+      if (entryButton) {
+        event.preventDefault?.();
+        void ctx.controller.openProjectDialogDirectoryEntry(
+          entryButton.dataset.projectDialogEntryPath,
+          entryButton.dataset.projectDialogEntryKind,
+        );
+      }
+    });
+
+    projectDialog?.addEventListener?.('input', (event) => {
+      if (event?.target?.id !== 'project-dialog-input') {
+        return;
+      }
+
+      ctx.controller.setProjectDialogCwdDraft(event.target.value);
+    });
+
+    projectDialogInput?.addEventListener('input', () => {
+      ctx.controller.setProjectDialogCwdDraft(projectDialogInput.value);
+    });
+
+    projectDialog?.addEventListener?.('submit', (event) => {
+      if (event?.target?.id !== 'project-dialog-form') {
+        return;
+      }
+
+      event.preventDefault();
+      void ctx.controller.createProject().then((created) => {
+        if (!created) {
+          return;
+        }
+
         ctx.controller.closeProjectDialog();
       });
-    }
+    });
 
     projectDialogForm?.addEventListener('submit', (event) => {
       event.preventDefault();
-      void ctx.controller.createProject(projectDialogInput?.value ?? '').then((created) => {
+      void ctx.controller.createProject().then((created) => {
         if (!created) {
           return;
         }
@@ -840,7 +1016,9 @@ export function bindControllerDocumentEvents(ctx) {
     });
 
     projectDialog?.addEventListener?.('close', () => {
-      clearProjectInput(ctx.documentRef);
+      if (ctx.state.projectDialog) {
+        ctx.controller.closeProjectDialog();
+      }
     });
 
     for (const button of renameDialog?.querySelectorAll?.('[data-rename-dialog-close]') ?? []) {

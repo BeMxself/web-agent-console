@@ -14,6 +14,256 @@ import {
   jsonErrorResponse,
 } from '../shared.js';
 
+function createFakeBoundElement(overrides = {}) {
+  const listeners = new Map();
+  return {
+    value: '',
+    selectionStart: 0,
+    selectionEnd: 0,
+    open: false,
+    hidden: false,
+    dataset: {},
+    addEventListener(type, handler) {
+      if (!type || typeof handler !== 'function') {
+        return;
+      }
+
+      const entries = listeners.get(type) ?? [];
+      entries.push(handler);
+      listeners.set(type, entries);
+    },
+    dispatchEvent(event) {
+      const type = typeof event === 'string' ? event : event?.type;
+      if (!type) {
+        return false;
+      }
+
+      for (const handler of listeners.get(type) ?? []) {
+        handler.call(this, event);
+      }
+
+      return true;
+    },
+    focus() {},
+    setSelectionRange(start, end) {
+      this.selectionStart = Number(start);
+      this.selectionEnd = Number(end);
+    },
+    querySelectorAll() {
+      return [];
+    },
+    showModal() {
+      this.open = true;
+    },
+    close() {
+      this.open = false;
+      this.dispatchEvent({ type: 'close' });
+    },
+    ...overrides,
+  };
+}
+
+function attachProjectDialog(fakeDocument) {
+  const projectDialog = createFakeBoundElement();
+  const projectDialogForm = createFakeBoundElement();
+  const projectDialogInput = createFakeBoundElement();
+  const originalQuerySelector = fakeDocument.querySelector.bind(fakeDocument);
+
+  fakeDocument.projectDialog = projectDialog;
+  fakeDocument.projectDialogForm = projectDialogForm;
+  fakeDocument.projectDialogInput = projectDialogInput;
+  fakeDocument.querySelector = (selector) => {
+    if (selector === '#project-dialog') {
+      return projectDialog;
+    }
+
+    if (selector === '#project-dialog-form') {
+      return projectDialogForm;
+    }
+
+    if (selector === '#project-dialog-input') {
+      return projectDialogInput;
+    }
+
+    return originalQuerySelector(selector);
+  };
+
+  return {
+    projectDialog,
+    projectDialogForm,
+    projectDialogInput,
+  };
+}
+
+function attachProjectDialogWithContinuityTracking(fakeDocument) {
+  const projectDialogForm = createFakeBoundElement();
+  const projectDialogInput = createFakeBoundElement({
+    focus() {
+      fakeDocument.activeElement = projectDialogInput;
+    },
+  });
+  const projectDialogBody = createFakeBoundElement({ scrollTop: 0 });
+  const projectDialog = createFakeBoundElement({
+    querySelector(selector) {
+      if (selector === '#project-dialog-input') {
+        return projectDialogInput;
+      }
+
+      if (selector === '.project-dialog-browser-body') {
+        return projectDialogBody;
+      }
+
+      return null;
+    },
+  });
+  let innerHtml = '';
+  let innerHtmlWrites = 0;
+  Object.defineProperty(projectDialog, 'innerHTML', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return innerHtml;
+    },
+    set(nextValue) {
+      innerHtml = String(nextValue);
+      innerHtmlWrites += 1;
+      if (innerHtmlWrites > 1) {
+        if (fakeDocument.activeElement === projectDialogInput) {
+          fakeDocument.activeElement = null;
+        }
+        projectDialogBody.scrollTop = 0;
+      }
+    },
+  });
+
+  const originalQuerySelector = fakeDocument.querySelector.bind(fakeDocument);
+  fakeDocument.projectDialog = projectDialog;
+  fakeDocument.projectDialogForm = projectDialogForm;
+  fakeDocument.projectDialogInput = projectDialogInput;
+  fakeDocument.activeElement = null;
+  fakeDocument.querySelector = (selector) => {
+    if (selector === '#project-dialog') {
+      return projectDialog;
+    }
+
+    if (selector === '#project-dialog-form') {
+      return projectDialogForm;
+    }
+
+    if (selector === '#project-dialog-input') {
+      return projectDialogInput;
+    }
+
+    return originalQuerySelector(selector);
+  };
+
+  return {
+    projectDialog,
+    projectDialogBody,
+    projectDialogForm,
+    projectDialogInput,
+    get innerHtmlWrites() {
+      return innerHtmlWrites;
+    },
+  };
+}
+
+function createClosestTarget(selector, dataset = {}) {
+  return {
+    closest(candidate) {
+      if (candidate !== selector) {
+        return null;
+      }
+
+      return { dataset };
+    },
+  };
+}
+
+test('browser app keeps add-project input focus, caret, and body scroll stable across the initial HOME browse load', async () => {
+  const fakeDocument = createFakeDocument();
+  const continuity = attachProjectDialogWithContinuityTracking(fakeDocument);
+  const { projectDialog, projectDialogBody, projectDialogInput } = continuity;
+  const homeDirectoryDeferred = createDeferred();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=') {
+        return homeDirectoryDeferred.promise;
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  const openPromise = app.openProjectDialog();
+
+  assert.equal(projectDialog.open, true);
+  assert.equal(fakeDocument.activeElement, projectDialogInput);
+
+  projectDialogInput.value = '/Users/songmingxu/Projects';
+  projectDialogInput.dispatchEvent({ type: 'input' });
+  projectDialogInput.setSelectionRange(6, 17);
+  projectDialogInput.focus();
+  projectDialogBody.scrollTop = 91;
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(fakeDocument.activeElement, projectDialogInput);
+  assert.equal(projectDialogInput.selectionStart, 6);
+  assert.equal(projectDialogInput.selectionEnd, 17);
+  assert.equal(projectDialogBody.scrollTop, 91);
+
+  homeDirectoryDeferred.resolve(
+    jsonResponse({
+      kind: 'directory',
+      name: 'songmingxu',
+      path: '/Users/songmingxu',
+      parentPath: '/Users',
+      entries: [{ kind: 'directory', name: 'Projects', path: '/Users/songmingxu/Projects' }],
+    }),
+  );
+  await openPromise;
+
+  assert.equal(projectDialog.open, true);
+  assert.equal(fakeDocument.activeElement, projectDialogInput);
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(projectDialogInput.value, '/Users/songmingxu/Projects');
+  assert.equal(projectDialogInput.selectionStart, 6);
+  assert.equal(projectDialogInput.selectionEnd, 17);
+  assert.equal(projectDialogBody.scrollTop, 91);
+});
+
 
 test('browser app posts pending question responses through the pending-action route', async () => {
   const requests = [];
@@ -362,6 +612,757 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
   assert.match(requests[3].body.text, /refactor/);
   assert.equal(requests[4].body.turnId, 'turn-2');
   assert.equal(app.getState().turnStatusBySession['thread-1'], 'completed');
+});
+
+test('browser app keeps add-project dialog draft state separate from the workspace file browser and submits the state-owned cwd draft', async () => {
+  const requests = [];
+  const fakeDocument = createFakeDocument();
+  const { projectDialog, projectDialogForm, projectDialogInput } = attachProjectDialog(fakeDocument);
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=%2Ftmp%2Fworkspace-a') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'workspace-a',
+          path: '/tmp/workspace-a',
+          parentPath: '/tmp',
+          entries: [{ kind: 'directory', name: 'src', path: '/tmp/workspace-a/src' }],
+        });
+      }
+
+      if (url === '/api/local-files/list?path=') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'songmingxu',
+          path: '/Users/songmingxu',
+          parentPath: '/Users',
+          entries: [
+            { kind: 'directory', name: 'Projects', path: '/Users/songmingxu/Projects' },
+            { kind: 'directory', name: 'Downloads', path: '/Users/songmingxu/Downloads' },
+          ],
+        });
+      }
+
+      if (url === '/api/local-files/list?path=%2FUsers%2Fsongmingxu%2FProjects') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'Projects',
+          path: '/Users/songmingxu/Projects',
+          parentPath: '/Users/songmingxu',
+          entries: [
+            {
+              kind: 'directory',
+              name: 'web-agent-console',
+              path: '/Users/songmingxu/Projects/web-agent-console',
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/projects' && options.method === 'POST') {
+        requests.push({
+          url,
+          method: options.method,
+          body: JSON.parse(options.body),
+        });
+        return jsonResponse({ ok: true }, 201);
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+  await app.selectActivityPanelTab('files');
+  assert.equal(app.getState().fileBrowser.currentPath, '/tmp/workspace-a');
+
+  await app.openProjectDialog();
+  assert.equal(projectDialog.open, true);
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu');
+  assert.equal(app.getState().projectDialog.directoryBrowser.currentPath, '/Users/songmingxu');
+  assert.equal(projectDialogInput.value, '/Users/songmingxu');
+  assert.equal(app.getState().fileBrowser.currentPath, '/tmp/workspace-a');
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-tab]', {
+      projectDialogTab: 'manual',
+    }),
+  });
+  assert.equal(app.getState().projectDialog.tab, 'manual');
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-tab]', {
+      projectDialogTab: 'browse',
+    }),
+  });
+  assert.equal(app.getState().projectDialog.tab, 'browse');
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-entry-path]', {
+      projectDialogEntryPath: '/Users/songmingxu/Projects',
+      projectDialogEntryKind: 'directory',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu/Projects',
+  );
+  assert.equal(app.getState().fileBrowser.currentPath, '/tmp/workspace-a');
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-parent-path]', {
+      projectDialogParentPath: '/Users/songmingxu',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu');
+  assert.equal(app.getState().projectDialog.directoryBrowser.currentPath, '/Users/songmingxu');
+
+  projectDialogInput.value = '/tmp/workspace-b';
+  projectDialogInput.dispatchEvent({ type: 'input' });
+  assert.equal(projectDialogInput.value, '/tmp/workspace-b');
+
+  projectDialogInput.value = '/tmp/ignored-by-submit';
+  projectDialogForm.dispatchEvent({
+    type: 'submit',
+    preventDefault() {},
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(requests, [
+    {
+      url: '/api/projects',
+      method: 'POST',
+      body: { cwd: '/tmp/workspace-b' },
+    },
+  ]);
+  assert.equal(app.getState().projectDialog, null);
+  assert.equal(projectDialog.open, false);
+  assert.equal(projectDialogInput.value, '');
+});
+
+test('browser app preserves a newer manual project dialog draft when the initial HOME browse response resolves late and reloads when returning to browse', async () => {
+  const fakeDocument = createFakeDocument();
+  const { projectDialog, projectDialogInput } = attachProjectDialog(fakeDocument);
+  const homeDirectoryDeferred = createDeferred();
+  const manualDirectoryDeferred = createDeferred();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=') {
+        return homeDirectoryDeferred.promise;
+      }
+
+      if (url === '/api/local-files/list?path=%2FUsers%2Fsongmingxu%2FProjects') {
+        return manualDirectoryDeferred.promise;
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+
+  const openPromise = app.openProjectDialog();
+  assert.equal(projectDialog.open, true);
+  assert.equal(app.getState().projectDialog.directoryBrowser.loading, true);
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-tab]', {
+      projectDialogTab: 'manual',
+    }),
+  });
+  projectDialogInput.value = '/Users/songmingxu/Projects';
+  projectDialogInput.dispatchEvent({ type: 'input' });
+
+  assert.equal(app.getState().projectDialog.tab, 'manual');
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+
+  homeDirectoryDeferred.resolve(
+    jsonResponse({
+      kind: 'directory',
+      name: 'songmingxu',
+      path: '/Users/songmingxu',
+      parentPath: '/Users',
+      entries: [{ kind: 'directory', name: 'Projects', path: '/Users/songmingxu/Projects' }],
+    }),
+  );
+  await openPromise;
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(projectDialogInput.value, '/Users/songmingxu/Projects');
+  assert.equal(app.getState().projectDialog.tab, 'manual');
+  assert.equal(app.getState().projectDialog.directoryBrowser.loading, false);
+  assert.equal(app.getState().projectDialog.directoryBrowser.currentPath, null);
+  assert.deepEqual(app.getState().projectDialog.directoryBrowser.entries, []);
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-tab]', {
+      projectDialogTab: 'browse',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(app.getState().projectDialog.tab, 'browse');
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(app.getState().projectDialog.directoryBrowser.loading, true);
+
+  manualDirectoryDeferred.resolve(
+    jsonResponse({
+      kind: 'directory',
+      name: 'Projects',
+      path: '/Users/songmingxu/Projects',
+      parentPath: '/Users/songmingxu',
+      entries: [{ kind: 'directory', name: 'web-agent-console', path: '/Users/songmingxu/Projects/web-agent-console' }],
+    }),
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu/Projects',
+  );
+  assert.deepEqual(app.getState().projectDialog.directoryBrowser.entries, [
+    { kind: 'directory', name: 'web-agent-console', path: '/Users/songmingxu/Projects/web-agent-console' },
+  ]);
+  assert.equal(projectDialogInput.value, '/Users/songmingxu/Projects');
+});
+
+test('browser app does not refetch the project dialog browse directory when manual mode keeps the loaded draft intact', async () => {
+  const fakeDocument = createFakeDocument();
+  const { projectDialog, projectDialogInput } = attachProjectDialog(fakeDocument);
+  let projectDirectoryRequestCount = 0;
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'songmingxu',
+          path: '/Users/songmingxu',
+          parentPath: '/Users',
+          entries: [{ kind: 'directory', name: 'Projects', path: '/Users/songmingxu/Projects' }],
+        });
+      }
+
+      if (url === '/api/local-files/list?path=%2FUsers%2Fsongmingxu%2FProjects') {
+        projectDirectoryRequestCount += 1;
+        return jsonResponse({
+          kind: 'directory',
+          name: 'Projects',
+          path: '/Users/songmingxu/Projects',
+          parentPath: '/Users/songmingxu',
+          entries: [{ kind: 'directory', name: 'web-agent-console', path: '/Users/songmingxu/Projects/web-agent-console' }],
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+  await app.openProjectDialog();
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-entry-path]', {
+      projectDialogEntryPath: '/Users/songmingxu/Projects',
+      projectDialogEntryKind: 'directory',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(projectDirectoryRequestCount, 1);
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu/Projects',
+  );
+  assert.deepEqual(app.getState().projectDialog.directoryBrowser.entries, [
+    { kind: 'directory', name: 'web-agent-console', path: '/Users/songmingxu/Projects/web-agent-console' },
+  ]);
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-tab]', {
+      projectDialogTab: 'manual',
+    }),
+  });
+  projectDialogInput.value = '/Users/songmingxu/Projects';
+  projectDialogInput.dispatchEvent({ type: 'input' });
+
+  projectDialog.dispatchEvent({
+    type: 'click',
+    preventDefault() {},
+    target: createClosestTarget('[data-project-dialog-tab]', {
+      projectDialogTab: 'browse',
+    }),
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(app.getState().projectDialog.tab, 'browse');
+  assert.equal(projectDirectoryRequestCount, 1);
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu/Projects',
+  );
+  assert.deepEqual(app.getState().projectDialog.directoryBrowser.entries, [
+    { kind: 'directory', name: 'web-agent-console', path: '/Users/songmingxu/Projects/web-agent-console' },
+  ]);
+});
+
+test('browser app ignores stale out-of-order project dialog directory responses', async () => {
+  const fakeDocument = createFakeDocument();
+  attachProjectDialog(fakeDocument);
+  const projectsDeferred = createDeferred();
+  const downloadsDeferred = createDeferred();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'songmingxu',
+          path: '/Users/songmingxu',
+          parentPath: '/Users',
+          entries: [
+            { kind: 'directory', name: 'Projects', path: '/Users/songmingxu/Projects' },
+            { kind: 'directory', name: 'Downloads', path: '/Users/songmingxu/Downloads' },
+          ],
+        });
+      }
+
+      if (url === '/api/local-files/list?path=%2FUsers%2Fsongmingxu%2FProjects') {
+        return projectsDeferred.promise;
+      }
+
+      if (url === '/api/local-files/list?path=%2FUsers%2Fsongmingxu%2FDownloads') {
+        return downloadsDeferred.promise;
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+  await app.openProjectDialog();
+
+  const firstLoadPromise = app.openProjectDialogDirectoryEntry(
+    '/Users/songmingxu/Projects',
+    'directory',
+  );
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(app.getState().projectDialog.directoryBrowser.loading, true);
+
+  const secondLoadPromise = app.openProjectDialogDirectoryEntry(
+    '/Users/songmingxu/Downloads',
+    'directory',
+  );
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Downloads');
+  assert.equal(app.getState().projectDialog.directoryBrowser.loading, true);
+
+  downloadsDeferred.resolve(
+    jsonResponse({
+      kind: 'directory',
+      name: 'Downloads',
+      path: '/Users/songmingxu/Downloads',
+      parentPath: '/Users/songmingxu',
+      entries: [{ kind: 'directory', name: 'Screenshots', path: '/Users/songmingxu/Downloads/Screenshots' }],
+    }),
+  );
+  await secondLoadPromise;
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Downloads');
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu/Downloads',
+  );
+  assert.deepEqual(app.getState().projectDialog.directoryBrowser.entries, [
+    { kind: 'directory', name: 'Screenshots', path: '/Users/songmingxu/Downloads/Screenshots' },
+  ]);
+
+  projectsDeferred.resolve(
+    jsonResponse({
+      kind: 'directory',
+      name: 'Projects',
+      path: '/Users/songmingxu/Projects',
+      parentPath: '/Users/songmingxu',
+      entries: [{ kind: 'directory', name: 'web-agent-console', path: '/Users/songmingxu/Projects/web-agent-console' }],
+    }),
+  );
+  await firstLoadPromise;
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Downloads');
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu/Downloads',
+  );
+  assert.deepEqual(app.getState().projectDialog.directoryBrowser.entries, [
+    { kind: 'directory', name: 'Screenshots', path: '/Users/songmingxu/Downloads/Screenshots' },
+  ]);
+});
+
+test('browser app ignores stale project dialog directory responses after close and reopen', async () => {
+  const fakeDocument = createFakeDocument();
+  const { projectDialog } = attachProjectDialog(fakeDocument);
+  const staleProjectsDeferred = createDeferred();
+  const reopenedHomeDeferred = createDeferred();
+  let homeRequestCount = 0;
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=') {
+        homeRequestCount += 1;
+        if (homeRequestCount === 1) {
+          return jsonResponse({
+            kind: 'directory',
+            name: 'songmingxu',
+            path: '/Users/songmingxu',
+            parentPath: '/Users',
+            entries: [{ kind: 'directory', name: 'Projects', path: '/Users/songmingxu/Projects' }],
+          });
+        }
+
+        return reopenedHomeDeferred.promise;
+      }
+
+      if (url === '/api/local-files/list?path=%2FUsers%2Fsongmingxu%2FProjects') {
+        return staleProjectsDeferred.promise;
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+  await app.openProjectDialog();
+
+  const staleLoadPromise = app.openProjectDialogDirectoryEntry(
+    '/Users/songmingxu/Projects',
+    'directory',
+  );
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(app.getState().projectDialog.directoryBrowser.loading, true);
+
+  projectDialog.close();
+  assert.equal(app.getState().projectDialog, null);
+  assert.equal(projectDialog.open, false);
+
+  const reopenPromise = app.openProjectDialog();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(app.getState().projectDialog.cwdDraft, '');
+  assert.equal(app.getState().projectDialog.directoryBrowser.loading, true);
+
+  reopenedHomeDeferred.resolve(
+    jsonResponse({
+      kind: 'directory',
+      name: 'songmingxu',
+      path: '/Users/songmingxu',
+      parentPath: '/Users',
+      entries: [{ kind: 'directory', name: 'Desktop', path: '/Users/songmingxu/Desktop' }],
+    }),
+  );
+  await reopenPromise;
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu');
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu',
+  );
+  assert.deepEqual(app.getState().projectDialog.directoryBrowser.entries, [
+    { kind: 'directory', name: 'Desktop', path: '/Users/songmingxu/Desktop' },
+  ]);
+
+  staleProjectsDeferred.resolve(
+    jsonResponse({
+      kind: 'directory',
+      name: 'Projects',
+      path: '/Users/songmingxu/Projects',
+      parentPath: '/Users/songmingxu',
+      entries: [{ kind: 'directory', name: 'stale', path: '/Users/songmingxu/Projects/stale' }],
+    }),
+  );
+  await staleLoadPromise;
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu');
+  assert.equal(
+    app.getState().projectDialog.directoryBrowser.currentPath,
+    '/Users/songmingxu',
+  );
+  assert.deepEqual(app.getState().projectDialog.directoryBrowser.entries, [
+    { kind: 'directory', name: 'Desktop', path: '/Users/songmingxu/Desktop' },
+  ]);
+});
+
+test('browser app preserves add-project dialog draft focus and body scroll across unrelated project updates', async () => {
+  const fakeDocument = createFakeDocument();
+  const continuity = attachProjectDialogWithContinuityTracking(fakeDocument);
+  const { projectDialog, projectDialogBody, projectDialogInput } = continuity;
+  let sessionsResponse = {
+    projects: [
+      {
+        id: '/tmp/workspace-a',
+        cwd: '/tmp/workspace-a',
+        displayName: 'workspace-a',
+        collapsed: false,
+        focusedSessions: [{ id: 'thread-1', name: 'Focus thread' }],
+        historySessions: { active: [], archived: [] },
+      },
+      {
+        id: '/tmp/workspace-b',
+        cwd: '/tmp/workspace-b',
+        displayName: 'workspace-b',
+        collapsed: false,
+        focusedSessions: [],
+        historySessions: { active: [], archived: [] },
+      },
+    ],
+  };
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse(sessionsResponse);
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Focus thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/local-files/list?path=') {
+        return jsonResponse({
+          kind: 'directory',
+          name: 'songmingxu',
+          path: '/Users/songmingxu',
+          parentPath: '/Users',
+          entries: [
+            { kind: 'directory', name: 'Projects', path: '/Users/songmingxu/Projects' },
+            { kind: 'directory', name: 'Downloads', path: '/Users/songmingxu/Downloads' },
+          ],
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.selectSession('thread-1');
+  await app.openProjectDialog();
+
+  assert.equal(projectDialog.open, true);
+
+  projectDialogInput.value = '/Users/songmingxu/Projects';
+  projectDialogInput.dispatchEvent({ type: 'input' });
+  projectDialogInput.focus();
+  projectDialogBody.scrollTop = 91;
+
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(fakeDocument.activeElement, projectDialogInput);
+  assert.equal(projectDialogBody.scrollTop, 91);
+  const baselineInnerHtmlWrites = continuity.innerHtmlWrites;
+
+  sessionsResponse = {
+    projects: [
+      {
+        id: '/tmp/workspace-a',
+        cwd: '/tmp/workspace-a',
+        displayName: 'workspace-a',
+        collapsed: false,
+        focusedSessions: [
+          { id: 'thread-1', name: 'Focus thread' },
+          { id: 'thread-2', name: 'New background thread' },
+        ],
+        historySessions: { active: [], archived: [] },
+      },
+      {
+        id: '/tmp/workspace-b',
+        cwd: '/tmp/workspace-b',
+        displayName: 'workspace-b',
+        collapsed: false,
+        focusedSessions: [],
+        historySessions: { active: [], archived: [] },
+      },
+    ],
+  };
+
+  await app.loadSessions();
+
+  assert.equal(projectDialog.open, true);
+  assert.equal(continuity.innerHtmlWrites, baselineInnerHtmlWrites);
+  assert.equal(app.getState().projectDialog.cwdDraft, '/Users/songmingxu/Projects');
+  assert.equal(projectDialogInput.value, '/Users/songmingxu/Projects');
+  assert.equal(fakeDocument.activeElement, projectDialogInput);
+  assert.equal(projectDialogBody.scrollTop, 91);
 });
 
 test('browser app windows large sessions from the latest turns and expands older turns near the top edge', async () => {

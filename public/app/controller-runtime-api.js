@@ -16,8 +16,10 @@ import {
 
 export function createRuntimeControllerApi(ctx) {
   return {
-    async createProject(cwd) {
-      const normalizedCwd = cwd?.trim();
+    async createProject(cwd = null) {
+      const normalizedCwd = String(
+        ctx.state.projectDialog?.cwdDraft ?? cwd ?? '',
+      ).trim();
       if (!normalizedCwd) {
         return null;
       }
