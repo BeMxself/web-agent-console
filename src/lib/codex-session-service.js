@@ -38,6 +38,7 @@ import {
   sanitizeThread,
   sanitizeTurn,
   sanitizeTurnItem,
+  buildOptimisticUserMessageContent,
   applyRuntimeEvent,
   summarizeRuntimeItem,
   markRuntimeSnapshotInterrupted,
@@ -886,33 +887,6 @@ export class CodexSessionService extends SessionService {
       runtime,
     );
   }
-}
-
-function buildOptimisticUserMessageContent(text, attachments = []) {
-  const content = [];
-  const normalizedText = String(text ?? '');
-  if (normalizedText) {
-    content.push({
-      type: 'text',
-      text: normalizedText,
-      text_elements: [],
-    });
-  }
-
-  for (const attachment of attachments) {
-    if (!attachment?.dataBase64 || !attachment?.mimeType) {
-      continue;
-    }
-
-    content.push({
-      type: 'image',
-      url: `data:${attachment.mimeType};base64,${attachment.dataBase64}`,
-      name: attachment.name ?? 'image',
-      mimeType: attachment.mimeType,
-    });
-  }
-
-  return content;
 }
 
 function normalizeStartedTurnResult(result) {

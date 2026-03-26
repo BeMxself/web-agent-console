@@ -4,6 +4,7 @@ import {
   normalizePendingApprovals,
   normalizePendingQuestionEntry,
   normalizePendingQuestions,
+  normalizeThreadStatus,
 } from './thread-utils.js';
 import { getDisplayTextFromPrompt, preferThreadText } from './text-utils.js';
 
@@ -451,25 +452,6 @@ export function upsertPendingQuestion(questions, question) {
   }
 
   return nextQuestions;
-}
-
-export function normalizeThreadStatus(status) {
-  if (!status || typeof status !== 'object') {
-    return { type: 'idle' };
-  }
-
-  if (status.type === 'active') {
-    return {
-      type: 'active',
-      activeFlags: Array.isArray(status.activeFlags)
-        ? status.activeFlags.filter((flag) => typeof flag === 'string')
-        : [],
-    };
-  }
-
-  return {
-    type: status.type ?? 'idle',
-  };
 }
 
 export function updateThreadNameInProjects(projects, threadId, name) {

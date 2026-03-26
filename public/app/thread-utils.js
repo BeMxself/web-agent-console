@@ -114,6 +114,25 @@ export function normalizePendingQuestionEntry(question) {
   };
 }
 
+export function normalizeThreadStatus(status) {
+  if (!status || typeof status !== 'object') {
+    return { type: 'idle' };
+  }
+
+  if (status.type === 'active') {
+    return {
+      type: 'active',
+      activeFlags: Array.isArray(status.activeFlags)
+        ? status.activeFlags.filter((flag) => typeof flag === 'string')
+        : [],
+    };
+  }
+
+  return {
+    type: status.type ?? 'idle',
+  };
+}
+
 export function collectProjectRuntimeState(projects) {
   const runtimeState = {
     turnStatusBySession: {},
