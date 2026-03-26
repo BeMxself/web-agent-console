@@ -604,7 +604,7 @@ test('browser app resets session history scroll, uses a history dialog, posts tu
   assert.equal(fakeDocument.conversationScroll.scrollTop, 2048);
   await app.sendTurn('continue with the refactor');
   assert.equal(app.getState().composerDraft, '');
-  assert.equal(fakeDocument.sendButton.textContent, '发送');
+  assert.equal(fakeDocument.sendButton.textContent, '执行中…');
   assert.equal(fakeDocument.sendButton.disabled, true);
   assert.equal(app.getState().turnStatusBySession['thread-1'], 'started');
   assert.equal(fakeDocument.interruptButton.hidden, false);
@@ -710,8 +710,7 @@ test('browser app restores an interrupted turn locally when the backend only ret
   assert.equal(fakeDocument.sendButton.textContent, '发送');
 });
 
-test('browser app allows codex sessions to send a follow-up prompt while a turn is running', async () => {
-  const requests = [];
+test('browser app disables follow-up sends while a codex turn is already running', async () => {
   const fakeDocument = createFakeDocument();
   const fakeEventSource = createFakeEventSource();
   const app = createAppController({
@@ -756,11 +755,6 @@ test('browser app allows codex sessions to send a follow-up prompt while a turn 
         });
       }
 
-      if (url === '/api/sessions/thread-1/turns' && options.method === 'POST') {
-        requests.push({ url, method: options.method, body: JSON.parse(options.body) });
-        return jsonResponse({ turnId: 'turn-3', status: 'started' }, 202);
-      }
-
       throw new Error(`Unhandled fetch url: ${url}`);
     },
     eventSourceFactory: () => fakeEventSource,
@@ -778,11 +772,237 @@ test('browser app allows codex sessions to send a follow-up prompt while a turn 
     payload: { threadId: 'thread-1', turnId: 'turn-2' },
   });
 
-  assert.equal(fakeDocument.sendButton.disabled, false);
-  assert.equal(fakeDocument.sendButton.dataset.action, 'send');
-  assert.equal(fakeDocument.sendButton.textContent, '发送');
+  assert.equal(fakeDocument.sendButton.disabled, true);
+  assert.equal(fakeDocument.sendButton.dataset.action, 'busy');
+  assert.equal(fakeDocument.sendButton.textContent, '执行中…');
   assert.equal(fakeDocument.interruptButton.hidden, false);
   assert.equal(fakeDocument.interruptButton.dataset.action, 'interrupt');
+
+  fakeDocument.composer.dispatchEvent({
+    type: 'submit',
+    preventDefault() {},
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(app.getState().composerDraft, 'follow up while running');
+  assert.equal(app.getState().turnStatusBySession['thread-1'], 'started');
+});
+
+test('browser app treats an active codex thread status as busy before runtime snapshots arrive', async () => {
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Codex thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'codex',
+          modelOptions: [],
+          reasoningEffortOptions: [],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: null,
+            sandboxMode: null,
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Codex thread',
+            cwd: '/tmp/workspace-a',
+            status: { type: 'active' },
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: null,
+          reasoningEffort: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  app.setComposerDraft('should not send while backend is active');
+
+  assert.equal(fakeDocument.sendButton.disabled, true);
+  assert.equal(fakeDocument.sendButton.dataset.action, 'busy');
+  assert.equal(fakeDocument.sendButton.textContent, '执行中…');
+});
+
+test('browser app clears stale active thread status after a fresh idle session detail refresh', async () => {
+  let detailRequestCount = 0;
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Codex thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'codex',
+          modelOptions: [],
+          reasoningEffortOptions: [],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: null,
+            sandboxMode: null,
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        detailRequestCount += 1;
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Codex thread',
+            cwd: '/tmp/workspace-a',
+            status: detailRequestCount === 1 ? { type: 'active' } : { type: 'loaded' },
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/settings') {
+        return jsonResponse({
+          model: null,
+          reasoningEffort: null,
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  assert.equal(fakeDocument.sendButton.dataset.action, 'busy');
+
+  await app.selectSession('thread-1');
+
+  assert.equal(fakeDocument.sendButton.dataset.action, 'send');
+  assert.equal(fakeDocument.sendButton.textContent, '发送');
+});
+
+test('browser app accepts codex turn responses that return a turn object instead of turnId', async () => {
+  const requests = [];
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url, options = {}) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [{ id: 'thread-1', name: 'Codex thread' }],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      if (url === '/api/session-options') {
+        return jsonResponse({
+          providerId: 'codex',
+          modelOptions: [],
+          reasoningEffortOptions: [],
+          defaults: {
+            model: null,
+            reasoningEffort: null,
+            agentType: null,
+            sandboxMode: null,
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1') {
+        return jsonResponse({
+          thread: {
+            id: 'thread-1',
+            name: 'Codex thread',
+            cwd: '/tmp/workspace-a',
+            turns: [{ id: 'turn-1', status: 'completed', items: [] }],
+          },
+        });
+      }
+
+      if (url === '/api/sessions/thread-1/turns' && options.method === 'POST') {
+        requests.push({ url, method: options.method, body: JSON.parse(options.body) });
+        return jsonResponse(
+          {
+            turn: {
+              id: 'turn-raw-2',
+              status: 'inProgress',
+              items: [],
+              error: null,
+            },
+          },
+          202,
+        );
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => createFakeEventSource(),
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+  await app.loadSessionOptions();
+  await app.selectSession('thread-1');
+
+  app.setComposerDraft('follow up while running');
 
   fakeDocument.composer.dispatchEvent({
     type: 'submit',
@@ -802,7 +1022,9 @@ test('browser app allows codex sessions to send a follow-up prompt while a turn 
       },
     },
   ]);
+  assert.equal(app.getState().activeTurnIdBySession['thread-1'], 'turn-raw-2');
   assert.equal(app.getState().turnStatusBySession['thread-1'], 'started');
+  assert.match(fakeDocument.conversationBody.innerHTML, /follow up while running/);
 });
 
 test('browser app can collapse and restore the composer without losing the current draft', async () => {

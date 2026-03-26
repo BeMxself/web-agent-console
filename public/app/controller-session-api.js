@@ -407,19 +407,20 @@ export function createSessionControllerApi(ctx) {
 
       ctx.applyAction({ type: 'composer_text_changed', payload: { text: '' } });
       ctx.applyAction({ type: 'composer_attachments_cleared' });
-      if (result?.turnId) {
+      const startedTurnId = getStartedTurnId(result);
+      if (startedTurnId) {
         ctx.applyAction({
           type: 'user_turn_submitted',
           payload: {
             threadId: sessionId,
-            turnId: result.turnId,
+            turnId: startedTurnId,
             text: draftText,
             attachments: draftAttachments,
           },
         });
         ctx.applyAction({
           type: 'turn_started',
-          payload: { threadId: sessionId, turnId: result.turnId },
+          payload: { threadId: sessionId, turnId: startedTurnId },
         });
       }
       ctx.controller.lastPostedTurn = { sessionId, text: draftText };
@@ -1224,4 +1225,9 @@ function findThreadItemById(thread, itemId) {
   }
 
   return null;
+}
+
+function getStartedTurnId(result) {
+  const normalizedTurnId = String(result?.turnId ?? result?.turn?.id ?? '').trim();
+  return normalizedTurnId || null;
 }

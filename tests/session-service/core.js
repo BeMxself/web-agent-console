@@ -610,6 +610,68 @@ test('session service maps image attachments to codex turn input items and prese
   }
 });
 
+test('session service normalizes codex turn/start responses that return a turn object', async () => {
+  const requests = [];
+  const service = new CodexSessionService({
+    client: {
+      onNotification() {},
+      async request(method, params) {
+        requests.push({ method, params });
+        if (method === 'thread/resume') {
+          return {
+            thread: {
+              id: params.threadId,
+              name: 'Thread 1',
+              cwd: '/tmp/workspace-a',
+              status: { type: 'loaded' },
+              turns: [],
+            },
+          };
+        }
+
+        if (method === 'turn/start') {
+          return {
+            turn: {
+              id: 'turn-raw-1',
+              status: 'inProgress',
+              items: [],
+              error: null,
+            },
+          };
+        }
+
+        throw new Error(`Unexpected method: ${method}`);
+      },
+    },
+  });
+
+  const result = await service.startTurn('thread-1', 'follow up');
+
+  assert.deepEqual(result, {
+    turnId: 'turn-raw-1',
+    status: 'started',
+    turn: {
+      id: 'turn-raw-1',
+      status: 'inProgress',
+      items: [],
+      error: null,
+    },
+  });
+  assert.deepEqual(requests, [
+    {
+      method: 'thread/resume',
+      params: { threadId: 'thread-1' },
+    },
+    {
+      method: 'turn/start',
+      params: {
+        threadId: 'thread-1',
+        input: [{ type: 'text', text: 'follow up' }],
+      },
+    },
+  ]);
+});
+
 test('session service rejects non-image attachments before starting a codex turn', async () => {
   const requests = [];
   const service = new CodexSessionService({

@@ -4,7 +4,7 @@ import {
   MIN_PANEL_WIDTH,
   PANEL_PREFERENCE_STORAGE_KEY,
 } from './constants.js';
-import { parseLocalFileReference } from './file-preview-utils.js';
+import { buildLocalFileContentUrl, parseLocalFileReference } from './file-preview-utils.js';
 
 export function clampPanelWidth(width, fallbackWidth) {
   const numericWidth = Number(width);
@@ -653,6 +653,24 @@ export function getMarkdownParser() {
     }
 
     return defaultLinkOpen(tokens, idx, options, env, self);
+  };
+
+  const defaultImageRender =
+    parser.renderer.rules.image ??
+    ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
+
+  parser.renderer.rules.image = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    const src = getTokenAttribute(token, 'src');
+    const localFileReference = parseLocalFileReference(src);
+
+    if (localFileReference) {
+      ensureTokenAttribute(token, 'src', buildLocalFileContentUrl(localFileReference.path));
+      appendTokenClass(token, 'message-inline-image');
+      ensureTokenAttribute(token, 'loading', 'lazy');
+    }
+
+    return defaultImageRender(tokens, idx, options, env, self);
   };
 
   markdownParser = parser;

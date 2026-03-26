@@ -104,7 +104,8 @@ export function renderFocusedSessions(project, selectedSessionId, state) {
 
 export function renderFocusedSessionItem(projectId, session, selectedSessionId, state) {
   const selected = session.id === selectedSessionId ? ' aria-current="true"' : '';
-  const sessionSignal = getSessionSignal(state, session.id, session.id === selectedSessionId);
+  const lockSignal = getActiveLockSignal(state, session);
+  const sessionSignal = lockSignal ?? getSessionSignal(state, session.id, session.id === selectedSessionId);
 
   return [
     '<div class="focused-session-row">',
@@ -211,6 +212,30 @@ export function renderHistoryItem(projectId, session, sectionKind) {
     }),
     '</button>',
   ].join('');
+}
+
+export function getActiveLockSignal(state, session) {
+  if (!session?.id || session?.status?.type !== 'active') {
+    return null;
+  }
+
+  const turnStatus = state?.turnStatusBySession?.[session.id] ?? 'idle';
+  const runtime = session.runtime ?? state?.sessionDetailsById?.[session.id]?.runtime ?? null;
+  const hasLocalRunningEvidence =
+    turnStatus === 'started' ||
+    turnStatus === 'interrupting' ||
+    runtime?.turnStatus === 'started' ||
+    runtime?.turnStatus === 'interrupting' ||
+    Boolean(runtime?.activeTurnId);
+
+  if (hasLocalRunningEvidence) {
+    return null;
+  }
+
+  return {
+    kind: 'locked',
+    label: '当前线程活跃中',
+  };
 }
 
 export function renderProjectDialogContent(state) {
@@ -506,6 +531,10 @@ export function renderSessionSignal(signal, { includePlaceholder = false } = {})
 
   if (signal.kind === 'busy') {
     return `<span class="session-status-indicator session-status-indicator--busy" title="${escapeHtml(signal.label)}" aria-label="${escapeHtml(signal.label)}"></span>`;
+  }
+
+  if (signal.kind === 'locked') {
+    return `<span class="session-status-indicator session-status-indicator--locked" title="${escapeHtml(signal.label)}" aria-label="${escapeHtml(signal.label)}">🔒</span>`;
   }
 
   if (signal.kind === 'unread') {

@@ -253,6 +253,16 @@
   animation: session-status-spin 820ms linear infinite;
 }
 
+.session-status-indicator--locked {
+  width: 18px;
+  height: 18px;
+  background: rgba(17, 32, 49, 0.08);
+  color: #39516a;
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: 0 0 0 4px rgba(17, 32, 49, 0.08);
+}
+
 .session-status-indicator--unread {
   width: 10px;
   height: 10px;
@@ -292,6 +302,11 @@
 .session-item--focused[aria-current="true"] .session-status-indicator--busy {
   border-color: rgba(17, 32, 49, 0.16);
   border-top-color: #d8754a;
+}
+
+.session-item--focused[aria-current="true"] .session-status-indicator--locked {
+  background: rgba(17, 32, 49, 0.12);
+  color: #22384f;
 }
 
 .session-item--focused[aria-current="true"] .session-status-indicator--unread {

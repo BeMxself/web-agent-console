@@ -143,6 +143,16 @@
   text-underline-offset: 2px;
 }
 
+.message-inline-image {
+  display: block;
+  max-width: min(100%, 720px);
+  max-height: 420px;
+  margin-top: 10px;
+  border-radius: 14px;
+  object-fit: contain;
+  box-shadow: 0 10px 24px rgba(17, 32, 49, 0.12);
+}
+
 body[data-theme="dark"] .file-preview-dialog-frame,
 .layout[data-theme="dark"] .file-preview-dialog-frame {
   border-color: rgba(159, 182, 203, 0.14);

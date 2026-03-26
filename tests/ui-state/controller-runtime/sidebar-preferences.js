@@ -540,4 +540,19 @@ test('browser app auto-resizes the composer input from one line up to five lines
 
   assert.equal(fakeDocument.composerInput.style.height, '148px');
   assert.equal(fakeDocument.composerInput.style.overflowY, 'auto');
+
+  // Simulate textarea shrink behavior in browsers: until height is reset,
+  // scrollHeight may stay pinned to the previously expanded box height.
+  Object.defineProperty(fakeDocument.composerInput, 'scrollHeight', {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return fakeDocument.composerInput.style.height === '52px' ? 32 : 220;
+    },
+  });
+
+  app.setComposerDraft('short');
+
+  assert.equal(fakeDocument.composerInput.style.height, '52px');
+  assert.equal(fakeDocument.composerInput.style.overflowY, 'hidden');
 });

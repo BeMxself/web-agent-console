@@ -10,6 +10,7 @@ import {
   canInterruptTurn,
   canSendTurn,
   getComposerAttachmentError,
+  isSessionActivelyRunning,
   normalizeComposerAttachments,
   renderComposerAttachmentCard,
   supportsLiveTurnFollowUp,
@@ -433,6 +434,7 @@ export function resolveComposerPrimaryAction(state) {
   const sessionId = state.selectedSessionId;
   const status = sessionId ? state.turnStatusBySession[sessionId] ?? 'idle' : 'idle';
   const liveFollowUp = supportsLiveTurnFollowUp(state);
+  const activeLike = isSessionActivelyRunning(state, sessionId);
 
   if (status === 'interrupting') {
     return {
@@ -443,7 +445,7 @@ export function resolveComposerPrimaryAction(state) {
     };
   }
 
-  if (status === 'started') {
+  if (activeLike) {
     if (liveFollowUp) {
       const sendable = canSendTurn(state);
       return {
@@ -499,6 +501,10 @@ export function syncComposerInputHeight(composerInput) {
 
   const minHeight = 52;
   const maxHeight = 148;
+  const resetHeight = `${minHeight}px`;
+  if (composerInput.style.height !== resetHeight) {
+    composerInput.style.height = resetHeight;
+  }
   const scrollHeight = Number(composerInput.scrollHeight ?? 0);
   const resolvedHeight = Math.min(maxHeight, Math.max(minHeight, scrollHeight || minHeight));
   const nextHeight = `${resolvedHeight}px`;

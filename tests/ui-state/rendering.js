@@ -369,6 +369,99 @@ test('render helpers show swipe actions plus busy and unread indicators in focus
   assert.match(sidebarHtml, /session-status-indicator--unread/);
 });
 
+test('render helpers show a lock marker for active sessions without local running evidence', () => {
+  const sidebarHtml = renderProjectSidebar({
+    systemStatus: {
+      overall: 'connected',
+      backend: { status: 'connected' },
+      relay: { status: 'online' },
+      lastError: null,
+    },
+    projects: [
+      {
+        id: '/tmp/workspace-a',
+        cwd: '/tmp/workspace-a',
+        displayName: 'workspace-a',
+        collapsed: false,
+        focusedSessions: [
+          {
+            id: 'thread-1',
+            name: 'Locked active thread',
+            preview: 'active elsewhere',
+            updatedAt: 5,
+            status: { type: 'active' },
+          },
+        ],
+        historySessions: { active: [], archived: [] },
+      },
+    ],
+    selectedSessionId: 'thread-1',
+    turnStatusBySession: {
+      'thread-1': 'idle',
+    },
+    sessionDetailsById: {
+      'thread-1': {
+        id: 'thread-1',
+        name: 'Locked active thread',
+        status: { type: 'active' },
+        turns: [],
+      },
+    },
+  });
+
+  assert.match(sidebarHtml, /session-status-indicator--locked/);
+  assert.match(sidebarHtml, /title="当前线程活跃中"/);
+});
+
+test('render helpers prefer the busy spinner over the lock marker when local runtime is running', () => {
+  const sidebarHtml = renderProjectSidebar({
+    systemStatus: {
+      overall: 'connected',
+      backend: { status: 'connected' },
+      relay: { status: 'online' },
+      lastError: null,
+    },
+    projects: [
+      {
+        id: '/tmp/workspace-a',
+        cwd: '/tmp/workspace-a',
+        displayName: 'workspace-a',
+        collapsed: false,
+        focusedSessions: [
+          {
+            id: 'thread-1',
+            name: 'Running thread',
+            preview: 'running locally',
+            updatedAt: 5,
+            status: { type: 'active' },
+            runtime: { turnStatus: 'started', activeTurnId: 'turn-1', diff: null, realtime: { status: 'idle', items: [] } },
+          },
+        ],
+        historySessions: { active: [], archived: [] },
+      },
+    ],
+    selectedSessionId: 'thread-1',
+    turnStatusBySession: {
+      'thread-1': 'started',
+    },
+    activeTurnIdBySession: {
+      'thread-1': 'turn-1',
+    },
+    sessionDetailsById: {
+      'thread-1': {
+        id: 'thread-1',
+        name: 'Running thread',
+        status: { type: 'active' },
+        runtime: { turnStatus: 'started', activeTurnId: 'turn-1', diff: null, realtime: { status: 'idle', items: [] } },
+        turns: [],
+      },
+    },
+  });
+
+  assert.match(sidebarHtml, /session-status-indicator--busy/);
+  assert.doesNotMatch(sidebarHtml, /session-status-indicator--locked/);
+});
+
 test('render helpers show streaming agent output and subagent jump entries in the thread header', () => {
   const detailHtml = renderThreadDetail({
     id: 'thread-2',
@@ -734,6 +827,10 @@ test('render helpers render full markdown in message bubbles and keep raw html e
               '',
               '[File URI](file:///tmp/workspace-a/notes.md:8)',
               '',
+              '![Local image](/tmp/workspace-a/proof.png)',
+              '',
+              '![File image](file:///tmp/workspace-a/diagram.png)',
+              '',
               '<script>alert("xss")</script>',
             ].join('\n'),
           },
@@ -764,6 +861,14 @@ test('render helpers render full markdown in message bubbles and keep raw html e
   assert.match(
     detailHtml,
     /<a[^>]+data-local-file-path="\/tmp\/workspace-a\/notes\.md"[^>]+data-local-file-line="8"/,
+  );
+  assert.match(
+    detailHtml,
+    /<img[^>]+src="\/api\/local-files\/content\?path=%2Ftmp%2Fworkspace-a%2Fproof\.png"[^>]+alt="Local image"/,
+  );
+  assert.match(
+    detailHtml,
+    /<img[^>]+src="\/api\/local-files\/content\?path=%2Ftmp%2Fworkspace-a%2Fdiagram\.png"[^>]+alt="File image"/,
   );
   assert.match(detailHtml, /&lt;script&gt;alert\(&quot;xss&quot;\)&lt;\/script&gt;/);
   assert.doesNotMatch(detailHtml, /<script>alert\("xss"\)<\/script>/);

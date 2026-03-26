@@ -322,7 +322,8 @@ export class CodexSessionService extends SessionService {
       }
     }
 
-    return await this.client.request('turn/start', payload);
+    const result = await this.client.request('turn/start', payload);
+    return normalizeStartedTurnResult(result);
   }
 
   async interruptTurn(threadId, turnId) {
@@ -776,6 +777,29 @@ export class CodexSessionService extends SessionService {
       .map((thread) => sanitizeThread(thread))
       .filter((thread) => typeof thread?.path === 'string' && thread.path.trim());
   }
+}
+
+function normalizeStartedTurnResult(result) {
+  const turnId = result?.turnId ?? result?.turn?.id ?? null;
+  const status = normalizeStartedTurnStatus(result?.status ?? result?.turn?.status ?? null);
+
+  return {
+    ...result,
+    ...(turnId ? { turnId } : {}),
+    ...(status ? { status } : {}),
+  };
+}
+
+function normalizeStartedTurnStatus(status) {
+  if (!status) {
+    return null;
+  }
+
+  if (status === 'inProgress') {
+    return 'started';
+  }
+
+  return status;
 }
 
 function normalizeCodexAgentType(value, { allowDefault = true } = {}) {
