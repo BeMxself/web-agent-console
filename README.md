@@ -160,6 +160,10 @@ node ./scripts/claude-hook-relay.mjs
 - 状态主要保存在本地 JSON 文件中，而不是数据库
 - Claude 外部进程与 Web 控制台之间的待处理动作一致性依赖 hook relay 配置是否正确
 
+## 开源协议
+
+本项目采用 [MIT License](LICENSE)，这是一个宽松的开源协议，允许你在保留原始版权和协议声明的前提下自由使用、修改、分发和商业化。
+
 ## 开发者文档
 
 如果你要了解项目结构、架构设计、环境变量、状态文件、接口和测试方式，请查看 [DESIGN.md](DESIGN.md)。
