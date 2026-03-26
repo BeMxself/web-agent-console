@@ -931,6 +931,68 @@ test('browser app clears stale active thread status after a fresh idle session d
   assert.equal(fakeDocument.sendButton.textContent, '发送');
 });
 
+test('browser app updates the session tree immediately from thread status SSE events', async () => {
+  const fakeEventSource = createFakeEventSource();
+  const fakeDocument = createFakeDocument();
+  const app = createAppController({
+    fetchImpl: async (url) => {
+      if (url === '/api/sessions') {
+        return jsonResponse({
+          projects: [
+            {
+              id: '/tmp/workspace-a',
+              cwd: '/tmp/workspace-a',
+              displayName: 'workspace-a',
+              collapsed: false,
+              focusedSessions: [
+                {
+                  id: 'thread-1',
+                  name: 'Watched thread',
+                  status: { type: 'idle' },
+                },
+              ],
+              historySessions: { active: [], archived: [] },
+            },
+          ],
+        });
+      }
+
+      throw new Error(`Unhandled fetch url: ${url}`);
+    },
+    eventSourceFactory: () => fakeEventSource,
+    documentRef: fakeDocument,
+    storageImpl: createFakeStorage(),
+  });
+
+  await app.loadSessions();
+
+  assert.doesNotMatch(fakeDocument.sessionList.innerHTML, /session-status-indicator--locked/);
+
+  fakeEventSource.emit({
+    type: 'thread_status_changed',
+    payload: {
+      threadId: 'thread-1',
+      status: {
+        type: 'active',
+      },
+    },
+  });
+
+  assert.match(fakeDocument.sessionList.innerHTML, /session-status-indicator--locked/);
+
+  fakeEventSource.emit({
+    type: 'thread_status_changed',
+    payload: {
+      threadId: 'thread-1',
+      status: {
+        type: 'idle',
+      },
+    },
+  });
+
+  assert.doesNotMatch(fakeDocument.sessionList.innerHTML, /session-status-indicator--locked/);
+});
+
 test('browser app accepts codex turn responses that return a turn object instead of turnId', async () => {
   const requests = [];
   const fakeDocument = createFakeDocument();

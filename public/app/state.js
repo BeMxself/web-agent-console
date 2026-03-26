@@ -37,6 +37,8 @@ import {
   updateProject,
   updateThreadNameInProjects,
   updateThreadNameInSessionDetails,
+  updateThreadStatusInProjects,
+  updateThreadStatusInSessionDetails,
 } from './project-utils.js';
 import { mergeTurnPlan } from './plan-utils.js';
 import {
@@ -648,6 +650,22 @@ export function reduceState(state = initialState, action) {
       return applyPendingQuestionUpdate(state, action.payload?.question, 'requested');
     case 'pending_question_resolved':
       return applyPendingQuestionUpdate(state, action.payload?.question, 'resolved');
+    case 'thread_status_changed': {
+      const threadId = action.payload?.threadId ?? action.threadId ?? null;
+      if (!threadId) {
+        return state;
+      }
+
+      return {
+        ...state,
+        projects: updateThreadStatusInProjects(state.projects, threadId, action.payload?.status),
+        sessionDetailsById: updateThreadStatusInSessionDetails(
+          state.sessionDetailsById,
+          threadId,
+          action.payload?.status,
+        ),
+      };
+    }
     case 'user_turn_submitted':
       return updateSessionThread(state, action.payload.threadId, (thread) =>
         upsertThreadTurn(thread, action.payload.turnId, (turn) => ({

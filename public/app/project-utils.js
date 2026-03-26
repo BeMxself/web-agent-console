@@ -344,6 +344,39 @@ export function updatePendingQuestionInSessionDetails(sessionDetailsById, questi
   };
 }
 
+export function updateThreadStatusInProjects(projects, threadId, status) {
+  return (projects ?? []).map((project) => ({
+    ...project,
+    focusedSessions: updateThreadStatusInThreadList(project.focusedSessions ?? [], threadId, status),
+    historySessions: {
+      active: updateThreadStatusInThreadList(project.historySessions?.active ?? [], threadId, status),
+      archived: updateThreadStatusInThreadList(project.historySessions?.archived ?? [], threadId, status),
+    },
+  }));
+}
+
+export function updateThreadStatusInThreadList(threads, threadId, status) {
+  return (threads ?? []).map((thread) => {
+    if (thread?.id !== threadId) {
+      return thread;
+    }
+
+    return applyThreadStatusToThread(thread, status);
+  });
+}
+
+export function updateThreadStatusInSessionDetails(sessionDetailsById, threadId, status) {
+  const thread = sessionDetailsById?.[threadId];
+  if (!thread) {
+    return sessionDetailsById;
+  }
+
+  return {
+    ...sessionDetailsById,
+    [threadId]: applyThreadStatusToThread(thread, status),
+  };
+}
+
 export function applyApprovalToThread(thread, approval, mode) {
   const approvals = normalizePendingApprovals(thread?.pendingApprovals);
   let nextApprovals = approvals;
@@ -380,6 +413,22 @@ export function applyPendingQuestionToThread(thread, question, mode) {
   };
 }
 
+export function applyThreadStatusToThread(thread, status) {
+  const pendingApprovalCount = Number(
+    thread?.pendingApprovalCount ?? thread?.pendingApprovals?.length ?? 0,
+  );
+  const waitingOnApprovalFromStatus =
+    status?.type === 'active' &&
+    Array.isArray(status.activeFlags) &&
+    status.activeFlags.includes('waitingOnApproval');
+
+  return {
+    ...thread,
+    status: normalizeThreadStatus(status),
+    waitingOnApproval: pendingApprovalCount > 0 || waitingOnApprovalFromStatus,
+  };
+}
+
 export function upsertApproval(approvals, approval) {
   const nextApprovals = [...approvals];
   const index = nextApprovals.findIndex((entry) => entry.id === approval.id);
@@ -402,6 +451,25 @@ export function upsertPendingQuestion(questions, question) {
   }
 
   return nextQuestions;
+}
+
+export function normalizeThreadStatus(status) {
+  if (!status || typeof status !== 'object') {
+    return { type: 'idle' };
+  }
+
+  if (status.type === 'active') {
+    return {
+      type: 'active',
+      activeFlags: Array.isArray(status.activeFlags)
+        ? status.activeFlags.filter((flag) => typeof flag === 'string')
+        : [],
+    };
+  }
+
+  return {
+    type: status.type ?? 'idle',
+  };
 }
 
 export function updateThreadNameInProjects(projects, threadId, name) {

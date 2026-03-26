@@ -462,6 +462,54 @@ test('render helpers prefer the busy spinner over the lock marker when local run
   assert.doesNotMatch(sidebarHtml, /session-status-indicator--locked/);
 });
 
+test('render helpers prefer the approval indicator over the lock marker when the active thread is waiting on approval', () => {
+  const sidebarHtml = renderProjectSidebar({
+    systemStatus: {
+      overall: 'connected',
+      backend: { status: 'connected' },
+      relay: { status: 'online' },
+      lastError: null,
+    },
+    projects: [
+      {
+        id: '/tmp/workspace-a',
+        cwd: '/tmp/workspace-a',
+        displayName: 'workspace-a',
+        collapsed: false,
+        focusedSessions: [
+          {
+            id: 'thread-1',
+            name: 'Approval thread',
+            preview: 'awaiting approval',
+            updatedAt: 5,
+            status: { type: 'active' },
+            waitingOnApproval: true,
+            pendingApprovalCount: 1,
+          },
+        ],
+        historySessions: { active: [], archived: [] },
+      },
+    ],
+    selectedSessionId: 'thread-1',
+    turnStatusBySession: {
+      'thread-1': 'idle',
+    },
+    sessionDetailsById: {
+      'thread-1': {
+        id: 'thread-1',
+        name: 'Approval thread',
+        status: { type: 'active' },
+        waitingOnApproval: true,
+        pendingApprovalCount: 1,
+        turns: [],
+      },
+    },
+  });
+
+  assert.match(sidebarHtml, /session-status-indicator--approval/);
+  assert.doesNotMatch(sidebarHtml, /session-status-indicator--locked/);
+});
+
 test('render helpers show streaming agent output and subagent jump entries in the thread header', () => {
   const detailHtml = renderThreadDetail({
     id: 'thread-2',

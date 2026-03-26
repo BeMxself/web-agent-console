@@ -346,3 +346,76 @@ test('ui reducer tracks approval mode and live approval updates in project and d
   assert.equal(state.sessionDetailsById['thread-1'].pendingApprovals[0].id, 'approval-2');
   assert.match(sidebarHtml, /session-status-indicator--approval/);
 });
+
+test('ui reducer keeps thread status and waiting-on-approval in sync with thread status events', () => {
+  let state = reduceState(undefined, {
+    type: 'projects_loaded',
+    payload: {
+      projects: [
+        {
+          id: '/tmp/workspace-a',
+          cwd: '/tmp/workspace-a',
+          displayName: 'workspace-a',
+          collapsed: false,
+          focusedSessions: [
+            {
+              id: 'thread-1',
+              name: 'Approval thread',
+              status: { type: 'idle' },
+              waitingOnApproval: false,
+            },
+          ],
+          historySessions: {
+            active: [],
+            archived: [],
+          },
+        },
+      ],
+    },
+  });
+
+  state = reduceState(state, {
+    type: 'session_detail_loaded',
+    payload: {
+      thread: {
+        id: 'thread-1',
+        name: 'Approval thread',
+        cwd: '/tmp/workspace-a',
+        status: { type: 'idle' },
+        waitingOnApproval: false,
+        turns: [],
+      },
+    },
+  });
+
+  state = reduceState(state, {
+    type: 'thread_status_changed',
+    payload: {
+      threadId: 'thread-1',
+      status: {
+        type: 'active',
+        activeFlags: ['waitingOnApproval'],
+      },
+    },
+  });
+
+  assert.equal(state.projects[0].focusedSessions[0].status.type, 'active');
+  assert.equal(state.projects[0].focusedSessions[0].waitingOnApproval, true);
+  assert.equal(state.sessionDetailsById['thread-1'].status.type, 'active');
+  assert.equal(state.sessionDetailsById['thread-1'].waitingOnApproval, true);
+
+  state = reduceState(state, {
+    type: 'thread_status_changed',
+    payload: {
+      threadId: 'thread-1',
+      status: {
+        type: 'idle',
+      },
+    },
+  });
+
+  assert.equal(state.projects[0].focusedSessions[0].status.type, 'idle');
+  assert.equal(state.projects[0].focusedSessions[0].waitingOnApproval, false);
+  assert.equal(state.sessionDetailsById['thread-1'].status.type, 'idle');
+  assert.equal(state.sessionDetailsById['thread-1'].waitingOnApproval, false);
+});

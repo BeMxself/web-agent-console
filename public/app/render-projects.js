@@ -104,14 +104,15 @@ export function renderFocusedSessions(project, selectedSessionId, state) {
 
 export function renderFocusedSessionItem(projectId, session, selectedSessionId, state) {
   const selected = session.id === selectedSessionId ? ' aria-current="true"' : '';
-  const lockSignal = getActiveLockSignal(state, session);
-  const sessionSignal = lockSignal ?? getSessionSignal(state, session.id, session.id === selectedSessionId);
+  const sessionSignal = getSessionSignal(state, session.id, session.id === selectedSessionId);
+  const lockSignal = getActiveLockSignal(state, session, sessionSignal);
+  const resolvedSignal = lockSignal ?? sessionSignal;
 
   return [
     '<div class="focused-session-row">',
     '<div class="session-swipe-lane">',
     `<button class="session-item session-item--focused" data-session-id="${escapeHtml(session.id)}"${selected}>`,
-    renderSessionItemBody(session, { signal: sessionSignal, showSubtitle: false }),
+    renderSessionItemBody(session, { signal: resolvedSignal, showSubtitle: false }),
     '</button>',
     `<button class="focus-remove focus-remove--embedded" type="button" data-project-id="${escapeHtml(projectId)}" data-focused-remove="${escapeHtml(session.id)}" aria-label="移出关注">×</button>`,
     '</div>',
@@ -214,13 +215,18 @@ export function renderHistoryItem(projectId, session, sectionKind) {
   ].join('');
 }
 
-export function getActiveLockSignal(state, session) {
+export function getActiveLockSignal(state, session, sessionSignal = null) {
   if (!session?.id || session?.status?.type !== 'active') {
     return null;
   }
 
+  if (sessionSignal?.kind === 'approval' || sessionSignal?.kind === 'question') {
+    return null;
+  }
+
   const turnStatus = state?.turnStatusBySession?.[session.id] ?? 'idle';
-  const runtime = session.runtime ?? state?.sessionDetailsById?.[session.id]?.runtime ?? null;
+  const sessionMeta = state?.sessionDetailsById?.[session.id] ?? session;
+  const runtime = session.runtime ?? sessionMeta?.runtime ?? null;
   const hasLocalRunningEvidence =
     turnStatus === 'started' ||
     turnStatus === 'interrupting' ||

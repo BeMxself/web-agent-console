@@ -17,6 +17,7 @@ import {
   cloneApprovalRecord,
   clonePendingQuestionRecord,
   createApprovalResolution,
+  createStartedRuntimeSnapshot,
   hasRuntimeSnapshot,
   hasThreadActiveFlag,
   isRuntimeSnapshotActive,
@@ -208,7 +209,7 @@ export class CodexSessionService extends SessionService {
         threadId,
         includeTurns: true,
       });
-      const sanitizedThread = sanitizeThread(result.thread);
+      const sanitizedThread = this.mergeOptimisticThreadState(sanitizeThread(result.thread));
       this.rememberThreads([sanitizedThread]);
       const thread = this.decorateThreadWithState(sanitizedThread, {
         includePendingApprovals: true,
@@ -323,7 +324,48 @@ export class CodexSessionService extends SessionService {
     }
 
     const result = await this.client.request('turn/start', payload);
-    return normalizeStartedTurnResult(result);
+    const started = normalizeStartedTurnResult(result);
+    if (!started.turnId) {
+      return started;
+    }
+
+    const nextRuntime = createStartedRuntimeSnapshot({
+      runtime: this.runtimeByThread.get(threadId),
+      turnId: started.turnId,
+    });
+    this.runtimeByThread.set(threadId, nextRuntime);
+    this.threadStatusById.set(
+      threadId,
+      sanitizeThreadStatus({
+        type: 'active',
+        activeFlags: ['running'],
+      }),
+    );
+    const optimisticThread = this.applyOptimisticStartedTurn(
+      this.threadIndex.get(threadId) ?? { id: threadId, turns: [] },
+      {
+        turnId: started.turnId,
+        text: normalizedTurnRequest.text,
+        attachments: normalizedTurnRequest.attachments,
+      },
+      nextRuntime,
+    );
+    this.threadIndex.set(threadId, optimisticThread);
+    await this.persistRuntimeSnapshot(threadId);
+    this.publishEvent({
+      type: 'turn_started',
+      threadId,
+      payload: {
+        threadId,
+        turnId: started.turnId,
+      },
+    });
+    this.publishThreadStatusChanged(threadId, {
+      type: 'active',
+      activeFlags: ['running'],
+    });
+    this.publishRuntimeReconciled(threadId, nextRuntime);
+    return started;
   }
 
   async interruptTurn(threadId, turnId) {
@@ -777,6 +819,100 @@ export class CodexSessionService extends SessionService {
       .map((thread) => sanitizeThread(thread))
       .filter((thread) => typeof thread?.path === 'string' && thread.path.trim());
   }
+
+  mergeOptimisticThreadState(thread) {
+    if (!thread?.id) {
+      return thread;
+    }
+
+    const cachedThread = this.threadIndex.get(thread.id);
+    if (!cachedThread) {
+      return thread;
+    }
+
+    const activeTurnId = normalizeRuntimeSnapshot(this.runtimeByThread.get(thread.id)).activeTurnId;
+    if (!activeTurnId) {
+      return thread;
+    }
+
+    const threadHasActiveTurn = (thread.turns ?? []).some((turn) => turn?.id === activeTurnId);
+    if (threadHasActiveTurn) {
+      return thread;
+    }
+
+    const cachedHasActiveTurn = (cachedThread.turns ?? []).some((turn) => turn?.id === activeTurnId);
+    if (!cachedHasActiveTurn) {
+      return thread;
+    }
+
+    return sanitizeThread({
+      ...thread,
+      updatedAt: Math.max(thread.updatedAt ?? 0, cachedThread.updatedAt ?? 0),
+      turns: cachedThread.turns ?? thread.turns ?? [],
+    });
+  }
+
+  applyOptimisticStartedTurn(thread, { turnId, text, attachments = [] } = {}, runtime) {
+    if (!thread?.id || !turnId) {
+      return attachRuntimeSnapshot(thread, runtime);
+    }
+
+    const turns = Array.isArray(thread.turns) ? thread.turns.map((turn) => sanitizeTurn(turn)) : [];
+    const nextTurn = {
+      id: turnId,
+      status: 'started',
+      error: null,
+      items: [
+        {
+          type: 'userMessage',
+          id: `user-${turnId}`,
+          content: buildOptimisticUserMessageContent(text, attachments),
+        },
+      ],
+    };
+    const existingTurnIndex = turns.findIndex((turn) => turn?.id === turnId);
+    if (existingTurnIndex === -1) {
+      turns.push(nextTurn);
+    } else {
+      turns[existingTurnIndex] = nextTurn;
+    }
+
+    return attachRuntimeSnapshot(
+      {
+        ...sanitizeThread(thread),
+        updatedAt: Math.max(thread.updatedAt ?? 0, nowInSeconds()),
+        turns,
+      },
+      runtime,
+    );
+  }
+}
+
+function buildOptimisticUserMessageContent(text, attachments = []) {
+  const content = [];
+  const normalizedText = String(text ?? '');
+  if (normalizedText) {
+    content.push({
+      type: 'text',
+      text: normalizedText,
+      text_elements: [],
+    });
+  }
+
+  for (const attachment of attachments) {
+    if (!attachment?.dataBase64 || !attachment?.mimeType) {
+      continue;
+    }
+
+    content.push({
+      type: 'image',
+      url: `data:${attachment.mimeType};base64,${attachment.dataBase64}`,
+      name: attachment.name ?? 'image',
+      mimeType: attachment.mimeType,
+    });
+  }
+
+  return content;
 }
 
 function normalizeStartedTurnResult(result) {

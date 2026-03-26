@@ -672,6 +672,111 @@ test('session service normalizes codex turn/start responses that return a turn o
   ]);
 });
 
+test('session service preserves a started codex turn across stale thread reads until codex materializes it', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'web-agent-console-codex-started-runtime-'));
+  const filePath = join(tempDir, 'runtime-store.json');
+  const runtimeStore = new RuntimeStore({ filePath });
+  const events = [];
+  const requests = [];
+  const service = new CodexSessionService({
+    runtimeStore,
+    client: {
+      onNotification() {},
+      async request(method, params) {
+        requests.push({ method, params });
+        if (method === 'thread/resume') {
+          return {
+            thread: {
+              id: params.threadId,
+              name: 'Thread 1',
+              cwd: '/tmp/workspace-a',
+              updatedAt: 10,
+              status: { type: 'loaded' },
+              turns: [
+                {
+                  id: 'turn-1',
+                  status: 'completed',
+                  items: [],
+                  error: null,
+                },
+              ],
+            },
+          };
+        }
+
+        if (method === 'turn/start') {
+          return { turnId: 'turn-2', status: 'started' };
+        }
+
+        if (method === 'thread/read') {
+          return {
+            thread: {
+              id: params.threadId,
+              name: 'Thread 1',
+              cwd: '/tmp/workspace-a',
+              updatedAt: 10,
+              status: { type: 'loaded' },
+              turns: [
+                {
+                  id: 'turn-1',
+                  status: 'completed',
+                  items: [],
+                  error: null,
+                },
+              ],
+            },
+          };
+        }
+
+        throw new Error(`Unexpected method: ${method}`);
+      },
+    },
+  });
+  service.subscribe((event) => events.push(event));
+
+  try {
+    const started = await service.startTurn('thread-1', 'follow up');
+    const persisted = await runtimeStore.load();
+    const detail = await service.readSession('thread-1');
+
+    assert.equal(started.turnId, 'turn-2');
+    assert.equal(persisted.threads['thread-1'].turnStatus, 'started');
+    assert.equal(persisted.threads['thread-1'].activeTurnId, 'turn-2');
+    assert.equal(detail.thread.runtime.turnStatus, 'started');
+    assert.equal(detail.thread.runtime.activeTurnId, 'turn-2');
+    assert.equal(detail.thread.turns.at(-1)?.id, 'turn-2');
+    assert.equal(detail.thread.turns.at(-1)?.status, 'started');
+    assert.equal(detail.thread.turns.at(-1)?.items?.[0]?.type, 'userMessage');
+    assert.equal(detail.thread.turns.at(-1)?.items?.[0]?.content?.[0]?.text, 'follow up');
+    assert.deepEqual(
+      events.map((event) => event.type),
+      ['turn_started', 'thread_status_changed', 'session_runtime_reconciled'],
+    );
+    assert.deepEqual(requests, [
+      {
+        method: 'thread/resume',
+        params: { threadId: 'thread-1' },
+      },
+      {
+        method: 'turn/start',
+        params: {
+          threadId: 'thread-1',
+          input: [{ type: 'text', text: 'follow up' }],
+        },
+      },
+      {
+        method: 'thread/read',
+        params: {
+          threadId: 'thread-1',
+          includeTurns: true,
+        },
+      },
+    ]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('session service rejects non-image attachments before starting a codex turn', async () => {
   const requests = [];
   const service = new CodexSessionService({
