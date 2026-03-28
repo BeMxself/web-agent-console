@@ -1,10 +1,31 @@
 {
-  "name": "web-agent-console-codex-poc",
-  "private": true,
+  "name": "web-agent-console",
+  "version": "0.1.0",
+  "description": "Local-first Web console for Codex and Claude agent sessions.",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "web-agent-console": "./bin/web-agent-console.js"
+  },
+  "files": [
+    "bin",
+    "public",
+    "scripts",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "agent",
+    "codex",
+    "claude",
+    "cli",
+    "console",
+    "web"
+  ],
   "scripts": {
-    "start": "node ./src/server.js",
+    "start": "node ./bin/web-agent-console.js",
     "test": "node --test ./tests/*.test.js",
     "smoke": "bash ./scripts/smoke-local.sh"
   },

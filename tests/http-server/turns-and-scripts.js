@@ -470,6 +470,10 @@ test('local start script prints help with sandbox and approval options', async (
 test('convergence guardrails remove session-service compatibility shells from transport and providers', () => {
   const httpServerSource = readFileSync(join(pocDir, 'src', 'lib', 'http-server.js'), 'utf8');
   const serverSource = readFileSync(join(pocDir, 'src', 'server.js'), 'utf8');
+  const runtimeSource = readFileSync(
+    join(pocDir, 'src', 'lib', 'web-agent-console-runtime.js'),
+    'utf8',
+  );
   const claudeProviderSource = readFileSync(
     join(pocDir, 'src', 'lib', 'claude-sdk-provider.js'),
     'utf8',
@@ -482,8 +486,9 @@ test('convergence guardrails remove session-service compatibility shells from tr
 
   assert.doesNotMatch(httpServerSource, /\bsessionService\b/);
   assert.doesNotMatch(httpServerSource, /typeof sessionService\./);
-  assert.match(serverSource, /createHttpServer\(\{\s*provider,/);
+  assert.match(runtimeSource, /createHttpServerImpl\(\{\s*provider,/);
   assert.doesNotMatch(serverSource, /sessionService:\s*provider/);
+  assert.doesNotMatch(runtimeSource, /sessionService:\s*provider/);
   assert.doesNotMatch(claudeProviderSource, /sessionService\.[^(]+\?\./);
   assert.doesNotMatch(codexProviderSource, /sessionService\.[^(]+\?\./);
   assert.doesNotMatch(providerFactorySource, /new SessionService\(/);
