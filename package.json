@@ -1,6 +1,6 @@
 {
   "name": "web-agent-console",
-  "version": "0.1.0",
+  "version": "1.0.0-alpha.1",
   "description": "Local-first Web console for Codex and Claude agent sessions.",
   "license": "MIT",
   "type": "module",
